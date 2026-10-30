@@ -6,7 +6,7 @@ import { randomToken } from "./security.mjs";
 
 const API = (process.env.HOMEWORKS_API || "https://api.home.works").replace(/\/$/, "");
 const LUNCH_SECONDS = 30 * 60;
-const MIN_SPLIT_SECONDS = 45 * 60; // only cut lunch out of a stretch at least this long
+const MIN_SPLIT_SECONDS = 45 * 60; // one entry this long gets the whole 30 min
 
 export class NotConnectedError extends Error {}
 
@@ -215,8 +215,50 @@ export async function clockOut(userId) {
   return data.clockOutUser; // null = wasn't clocked in
 }
 
-// Cuts a 30-minute gap out of the middle of the longest stretch (job or shop/drive)
-// from the shift that just ended. Clock-in and clock-out times stay as punched.
+// Takes 30 minutes of lunch out of the shift that just ended. Clock-in and clock-out
+// times always stay as punched; the time comes out of the middle of entries.
+// 1) Normal case: one 30-min gap in the middle of the longest entry (45+ min long).
+// 2) Choppy day with no 45-min entry: the 30 min is spread across the longest entries,
+//    always leaving at least 10 min of each entry in place.
+const KEEP_SECONDS = 10 * 60;      // never shrink an entry below this
+const MIN_PIECE_SECONDS = 5 * 60;  // don't bother with cuts smaller than this
+
+async function cutGap(entry, cutSecs, userId) {
+  const startMs = new Date(entry.startedAt).getTime();
+  const gapStart = new Date(startMs + Math.round((entry.secs - cutSecs) / 2) * 1000);
+  const gapEnd = new Date(gapStart.getTime() + cutSecs * 1000);
+  const mins = Math.round(cutSecs / 60);
+  const note = (extra) => [entry.notes, extra].filter(Boolean).join(" | ");
+
+  const input = {
+    startedAt: gapEnd.toISOString(),
+    endedAt: entry.endedAt,
+    userId,
+    notes: note(`After ${mins} min of 30 min lunch deducted (shop clock)`),
+  };
+  if (entry.eventId) {
+    input.eventId = entry.eventId;
+    if (entry.customerId) input.customerId = entry.customerId;
+    if (entry.propertyId) input.propertyId = entry.propertyId;
+  } else if (entry.categoryId) {
+    input.categoryId = entry.categoryId;
+  }
+  if (entry.hourlyRate != null) input.hourlyRate = entry.hourlyRate;
+
+  // Add the second half first, then shorten the original, so time is never lost if a step fails.
+  const added = await gql(`mutation($i: TimeEntryInput!) { addTimeEntry(input: $i) { id } }`, { i: input });
+  try {
+    await gql(`mutation($id: SafeInt!, $i: UpdateTimeEntryInput!) { updateTimeEntry(timeEntryId: $id, input: $i) { id } }`, {
+      id: entry.id,
+      i: { endedAt: gapStart.toISOString(), notes: note(`Before ${mins} min of 30 min lunch deducted (shop clock)`) },
+    });
+  } catch (err) {
+    await gql(`mutation($id: SafeInt!) { deleteTimeEntry(timeEntryId: $id) }`, { id: added.addTimeEntry.id }).catch(() => {});
+    throw err;
+  }
+  return { entryId: entry.id, type: entry.type, minutes: mins, gapStart: gapStart.toISOString(), gapEnd: gapEnd.toISOString() };
+}
+
 export async function deductLunch(userId, clockOutAt) {
   const end = new Date(clockOutAt || Date.now());
   const from = new Date(end - 16 * 3600_000).toISOString();
@@ -226,50 +268,44 @@ export async function deductLunch(userId, clockOutAt) {
     { u: userId, from }
   );
   const fromMs = end.getTime() - 16 * 3600_000;
-  const done = data.timeEntries.filter(
-    (e) =>
-      e.endedAt &&
-      new Date(e.startedAt).getTime() >= fromMs &&
-      new Date(e.endedAt).getTime() <= end.getTime() + 60_000 &&
-      !String(e.notes || "").includes("30 min lunch deducted")
-  );
-  const candidates = done
+  const entries = data.timeEntries
+    .filter(
+      (e) =>
+        e.endedAt &&
+        new Date(e.startedAt).getTime() >= fromMs &&
+        new Date(e.endedAt).getTime() <= end.getTime() + 60_000 &&
+        !String(e.notes || "").includes("lunch deducted")
+    )
     .map((e) => ({ ...e, secs: (new Date(e.endedAt) - new Date(e.startedAt)) / 1000 }))
-    .filter((e) => e.secs >= MIN_SPLIT_SECONDS)
     .sort((a, b) => b.secs - a.secs);
-  const pick = candidates[0];
-  if (!pick) return { ok: false, reason: "No stretch of 45+ minutes found in today's time to take lunch out of." };
 
-  const startMs = new Date(pick.startedAt).getTime();
-  const gapStart = new Date(startMs + Math.round((pick.secs - LUNCH_SECONDS) / 2) * 1000);
-  const gapEnd = new Date(gapStart.getTime() + LUNCH_SECONDS * 1000);
-  const note = (extra) => [pick.notes, extra].filter(Boolean).join(" | ");
-
-  const input = {
-    startedAt: gapEnd.toISOString(),
-    endedAt: pick.endedAt,
-    userId,
-    notes: note("After 30 min lunch deducted (shop clock)"),
-  };
-  if (pick.eventId) {
-    input.eventId = pick.eventId;
-    if (pick.customerId) input.customerId = pick.customerId;
-    if (pick.propertyId) input.propertyId = pick.propertyId;
-  } else if (pick.categoryId) {
-    input.categoryId = pick.categoryId;
+  // Plan the cuts.
+  const plan = [];
+  if (entries[0] && entries[0].secs >= MIN_SPLIT_SECONDS) {
+    plan.push([entries[0], LUNCH_SECONDS]);
+  } else {
+    let left = LUNCH_SECONDS;
+    for (const e of entries) {
+      if (left <= 0) break;
+      const room = Math.floor((e.secs - KEEP_SECONDS) / 60) * 60;
+      const take = Math.min(left, room);
+      if (take < MIN_PIECE_SECONDS) continue;
+      plan.push([e, take]);
+      left -= take;
+    }
+    if (left > 0) {
+      return { ok: false, reason: `Not enough time on the clock today to take out 30 min of lunch (could only find ${Math.round((LUNCH_SECONDS - left) / 60)} min). Nothing was changed.` };
+    }
   }
-  if (pick.hourlyRate != null) input.hourlyRate = pick.hourlyRate;
 
-  // Add the second half first, then shorten the original, so time is never lost if a step fails.
-  const added = await gql(`mutation($i: TimeEntryInput!) { addTimeEntry(input: $i) { id } }`, { i: input });
-  try {
-    await gql(`mutation($id: SafeInt!, $i: UpdateTimeEntryInput!) { updateTimeEntry(timeEntryId: $id, input: $i) { id } }`, {
-      id: pick.id,
-      i: { endedAt: gapStart.toISOString(), notes: note("Before 30 min lunch deducted (shop clock)") },
-    });
-  } catch (err) {
-    await gql(`mutation($id: SafeInt!) { deleteTimeEntry(timeEntryId: $id) }`, { id: added.addTimeEntry.id }).catch(() => {});
-    return { ok: false, reason: `Couldn't adjust the time entry: ${err.message}` };
+  const cuts = [];
+  for (const [entry, secs] of plan) {
+    try {
+      cuts.push(await cutGap(entry, secs, userId));
+    } catch (err) {
+      const done = cuts.reduce((n, c) => n + c.minutes, 0);
+      return { ok: false, cuts, reason: `Only ${done} of 30 min of lunch was taken out; the rest needs fixing by hand. (${err.message})` };
+    }
   }
-  return { ok: true, entryId: pick.id, type: pick.type, gapStart: gapStart.toISOString(), gapEnd: gapEnd.toISOString() };
+  return { ok: true, cuts };
 }

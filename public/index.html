@@ -62,7 +62,7 @@
 
   .msg { min-height: 22px; margin-top: 14px; color: var(--jb-danger); font-weight: 600; font-size: 15px; }
 
-  .title { font-size: 56px; line-height: 1.05; color: var(--jb-brown); margin: 6px 0 0; }
+  .title { font-size: clamp(38px, 8vw, 56px); line-height: 1.05; color: var(--jb-brown); margin: 6px 0 0; }
   .sub { font-size: 24px; line-height: 1.25; color: #8a7448; margin: 4px 0 4px; }
   .sub-es { font-size: 15px; color: var(--jb-gray-600); margin: 0 0 22px; }
   .dots3 { margin: 18px 0 26px; }
@@ -271,11 +271,11 @@ async function clock(action, lunch) {
     doneNote("");
     if (action === "in") {
       $("done-title").textContent = r.already ? "Already clocked in" : `Clocked in, ${first}`;
-      $("done-text").innerHTML = r.already ? "You were <em>already</em> on the clock" : `${fmtTime(r.at)} · Have a <em>good day</em>`;
+      $("done-text").innerHTML = r.already ? "You were already on the clock" : `${fmtTime(r.at)} · Have a good day!`;
       $("done-es").textContent = r.already ? "Ya habías fichado entrada." : "Entrada fichada. ¡Que tengas buen día!";
     } else {
       $("done-title").textContent = r.already ? "Not clocked in" : `Clocked out, ${first}`;
-      $("done-text").innerHTML = r.already ? "You <em>weren't</em> on the clock" : `${fmtTime(r.at)} · See you <em>tomorrow</em>`;
+      $("done-text").innerHTML = r.already ? "You weren't on the clock" : `${fmtTime(r.at)} · See you tomorrow!`;
       $("done-es").textContent = r.already ? "No habías fichado entrada." : "Salida fichada. ¡Hasta mañana!";
     }
     show("s-done");

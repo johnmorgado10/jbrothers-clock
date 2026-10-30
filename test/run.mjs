@@ -132,6 +132,18 @@ t("job timer split keeps job", L.ok && ev.length === 2 && ev.every((e) => e.cust
 L = await hw.deductLunch(2, "2026-10-31T20:00:00Z");
 t("nothing to cut -> not ok", !L.ok, L);
 
+// Choppy day: no 45-min entry, so lunch is spread across the longest entries
+for (const [a, b] of [["13:00", "13:25"], ["14:00", "14:25"], ["15:00", "15:20"], ["16:00", "16:04"]])
+  entries.push({ id: nextId++, userId: 2, type: "EVENT_TIMER", eventId: 88, customerId: 1, propertyId: 1, categoryId: null, startedAt: `2026-10-31T${a}:00Z`, endedAt: `2026-10-31T${b}:00Z`, hourlyRate: "16", notes: null });
+const dayMins = () => entries.filter((e) => e.userId === 2 && e.startedAt.startsWith("2026-10-31")).reduce((s, e) => s + (Date.parse(e.endedAt) - Date.parse(e.startedAt)), 0) / 60e3;
+const beforeMins = dayMins();
+L = await hw.deductLunch(2, "2026-10-31T17:00:00Z");
+t("choppy day spread across entries", L.ok && L.cuts.length === 2 && beforeMins - dayMins() === 30, { L, beforeMins, after: dayMins() });
+const tiny = entries.filter((e) => e.startedAt === "2026-10-31T16:00:00Z")[0];
+t("tiny entry left alone", Date.parse(tiny.endedAt) - Date.parse(tiny.startedAt) === 4 * 60e3);
+L = await hw.deductLunch(2, "2026-10-31T17:00:00Z");
+t("already-cut entries not cut twice", !L.ok, L);
+
 // Update failure rolls back
 entries.push({ id: nextId++, userId: 2, type: "GLOBAL_TIMER", categoryId: 11154, startedAt: "2026-11-01T12:00:00Z", endedAt: "2026-11-01T18:00:00Z", hourlyRate: "16", notes: null });
 const before = entries.length; globalThis.FAIL_UPDATE = true;

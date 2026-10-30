@@ -24,9 +24,10 @@ clock-out times stay as punched.
 - Everything the kiosk remembers lives in Netlify Blobs (store `kiosk`), not in the code.
 
 ## Lunch rule
-The 30 minutes come out of the middle of the longest single time entry (job timer or shop/drive
-time) from the shift that just ended, as long as it's at least 45 minutes. If there's no such
-entry, the admin screen shows it under "Needs attention" so it can be fixed by hand in Homeworks.
+The clock-in and clock-out times always stay as punched. The 30 minutes come out of the middle of entries:
+- **Normal day:** one 30-minute gap in the middle of the longest entry (job timer or shop/drive time), if it's 45+ minutes.
+- **Choppy day** (no single entry that long): the 30 minutes are spread across the longest entries, e.g. 15 + 15. At least 10 minutes of each entry is always left in place.
+- **Not enough time on the clock** (a day under about 40 minutes): nothing is changed, and it shows on the admin screen under "Needs attention."
 
 ## Test
 `node test/run.mjs` runs the logic against a fake Homeworks.
