@@ -41,12 +41,12 @@ async function kioskDevice(req) {
 
 async function findByPin(pin, deviceId) {
   const wait = await lockedFor(`device:${deviceId}`);
-  if (wait) return { error: `Too many wrong PINs. Try again in ${wait} seconds.`, status: 429 };
+  if (wait) return { error: `Too many wrong PINs. Try again in ${wait} seconds. · Demasiados intentos. Espera ${wait} segundos.`, status: 429 };
   const cfg = await getConfig();
   const hit = Object.entries(cfg.pins).find(([, v]) => v.pin === String(pin));
   if (!hit) {
     await recordFailure(`device:${deviceId}`);
-    return { error: "PIN not recognized.", status: 401 };
+    return { error: "PIN not recognized. · PIN no reconocido.", status: 401 };
   }
   await clearFailures(`device:${deviceId}`);
   return { userId: Number(hit[0]), name: hit[1].name };

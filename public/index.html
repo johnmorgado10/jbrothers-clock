@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#ffffff">
 <meta name="color-scheme" content="light only">
+<link rel="icon" type="image/png" href="/img/icon-192.png">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <title>Shop Clock · J-Brothers Landscaping</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,7 +38,7 @@
 
   .tagline { margin-bottom: 14px; }
   .clock { font-size: 104px; line-height: 1; color: var(--jb-brown); font-variant-numeric: tabular-nums; }
-  .clock .ampm { font-size: 34px; margin-left: 8px; color: var(--jb-green-700); letter-spacing: .06em; }
+  .clock .ampm { font-size: 34px; margin-left: 8px; color: var(--jb-brown); letter-spacing: .06em; }
   .date { margin: 12px 0 26px; }
 
   .pin-card { padding: 26px 24px 22px; }
@@ -102,8 +105,8 @@
     <div class="clock serif" id="clock">--:--</div>
     <div class="label date" id="date"></div>
     <div class="card pin-card">
-      <p class="prompt serif">Enter your <em>PIN</em></p>
-      <p class="prompt-es serif">Ingrese su PIN de 4 dígitos</p>
+      <p class="prompt serif">Enter your PIN</p>
+      <p class="prompt-es serif">Introduce tu PIN de 4 dígitos</p>
       <div class="pin-dots" id="dots"><div></div><div></div><div></div><div></div></div>
       <div class="pad" id="pad">
         <button>1</button><button>2</button><button>3</button>
@@ -124,11 +127,11 @@
     <p class="sub-es" id="status-es"></p>
     <button class="btn btn-primary big" id="btn-in">
       <svg class="ico" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
-      Clock In<small>Entrada</small>
+      Clock In<small>Fichar entrada</small>
     </button>
     <button class="btn btn-secondary big" id="btn-out">
       <svg class="ico" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
-      Clock Out<small>Salida</small>
+      Clock Out<small>Fichar salida</small>
     </button>
     <button class="btn btn-ghost ghost-wide" id="btn-cancel">Cancel · Cancelar</button>
     <div class="msg" id="action-msg"></div>
@@ -155,14 +158,13 @@
 <div class="overlay" id="lunch">
   <div class="dialog">
     <div class="label">Before you go</div>
-    <h2 class="title serif">Did you take <em>lunch?</em></h2>
-    <p class="sub serif">¿Tomó almuerzo?</p>
-    <p class="sub-es" style="margin:6px 0 0">Yes takes 30 minutes off today's hours.<br>Sí descuenta 30 minutos de hoy.</p>
+    <h2 class="title serif">Did you take lunch?</h2>
+    <p class="sub serif">¿Tomaste almuerzo?</p>
     <div class="row">
       <button class="btn btn-primary big" id="lunch-yes">Yes<small>Sí</small></button>
       <button class="btn btn-secondary big" id="lunch-no">No<small>No</small></button>
     </div>
-    <button class="btn btn-ghost ghost-wide" id="lunch-cancel">Go back · Regresar</button>
+    <button class="btn btn-ghost ghost-wide" id="lunch-cancel">Go back · Volver</button>
   </div>
 </div>
 
@@ -233,10 +235,10 @@ async function lookup() {
     $("hello").textContent = `Hi, ${r.name.split(" ")[0]}`;
     if (r.clockedIn) {
       $("status").innerHTML = `You're <em>clocked in</em> since ${fmtTime(r.since)}`;
-      $("status-es").textContent = `Está registrado desde ${fmtTime(r.since)}`;
+      $("status-es").textContent = `Fichaste entrada a las ${fmtTime(r.since)}`;
     } else {
       $("status").innerHTML = `You're <em>clocked out</em> right now`;
-      $("status-es").textContent = "No está registrado";
+      $("status-es").textContent = "No has fichado";
     }
     $("btn-in").style.display = r.clockedIn ? "none" : "flex";
     $("btn-out").style.display = r.clockedIn ? "flex" : "none";
@@ -270,16 +272,11 @@ async function clock(action, lunch) {
     if (action === "in") {
       $("done-title").textContent = r.already ? "Already clocked in" : `Clocked in, ${first}`;
       $("done-text").innerHTML = r.already ? "You were <em>already</em> on the clock" : `${fmtTime(r.at)} · Have a <em>good day</em>`;
-      $("done-es").textContent = r.already ? "Ya estaba registrado." : "¡Que tenga buen día!";
+      $("done-es").textContent = r.already ? "Ya habías fichado entrada." : "Entrada fichada. ¡Que tengas buen día!";
     } else {
       $("done-title").textContent = r.already ? "Not clocked in" : `Clocked out, ${first}`;
       $("done-text").innerHTML = r.already ? "You <em>weren't</em> on the clock" : `${fmtTime(r.at)} · See you <em>tomorrow</em>`;
-      $("done-es").textContent = r.already ? "No estaba registrado." : "¡Hasta mañana!";
-      if (r.lunch && r.lunch.ok) doneNote("30 min lunch taken off today.<br>30 min de almuerzo descontados.");
-      if (r.lunch && !r.lunch.ok) {
-        $("done-icon").className = "done-mark warn"; $("done-icon").innerHTML = ICON_WARN;
-        doneNote("Lunch couldn't be taken off automatically. The office will fix it.<br>La oficina corregirá el almuerzo.", true);
-      }
+      $("done-es").textContent = r.already ? "No habías fichado entrada." : "Salida fichada. ¡Hasta mañana!";
     }
     show("s-done");
   } catch (err) {
