@@ -1,0 +1,102 @@
+/* J-Brothers Landscaping design system: tokens and shared pieces for the shop clock. */
+:root {
+  --jb-green: #68801f;
+  --jb-green-900: #2e3a0c;
+  --jb-green-800: #445415;
+  --jb-green-700: #556a19;
+  --jb-green-300: #adb989;
+  --jb-green-200: #cfd6b6;
+  --jb-green-100: #e8ecdb;
+  --jb-brown: #684500;
+  --jb-brown-800: #4a3100;
+  --jb-brown-700: #573a00;
+  --jb-brown-300: #d0c7b6;
+  --jb-brown-200: #e4e0d9;
+  --jb-brown-100: #f3f0ea;
+  --jb-ink: #1c1a14;
+  --jb-gray-600: #6d6d6d;
+  --jb-gray-400: #a3a19c;
+  --jb-rule: #e4e0d9;
+  --jb-paper: #f2f2f2;
+  --jb-danger: #a23b22;
+  --jb-danger-bg: #f5e3dd;
+  --jb-warning: #b7801a;
+  --jb-warning-bg: #f6ecd6;
+
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-body: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --border-w: 1.5px;
+  --shadow-md: 0 6px 18px -6px rgba(46, 31, 0, .18);
+  --shadow-lg: 0 18px 48px -12px rgba(46, 31, 0, .28);
+  --focus-ring: 0 0 0 3px rgba(104, 128, 31, .35);
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--jb-paper); color: var(--jb-ink); font-family: var(--font-body); }
+
+/* Display type: Instrument Serif, 400 only. */
+.serif { font-family: var(--font-display); font-weight: 400; letter-spacing: .02em; }
+.serif em { font-style: italic; }
+
+/* Tracked uppercase label, the brand's signature treatment. */
+.label {
+  font-family: var(--font-body); font-size: 13px; line-height: 1; font-weight: 500;
+  letter-spacing: .42em; text-transform: uppercase; color: var(--jb-gray-600);
+}
+
+/* "• SHOP CLOCK •" tagline with drawn green dots. */
+.tagline {
+  display: inline-flex; align-items: center; gap: 12px;
+  font-size: 13px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: var(--jb-brown);
+}
+.tagline::before, .tagline::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--jb-green); }
+
+/* Three dots: green / brown / green. */
+.dots3 { display: flex; gap: 8px; justify-content: center; }
+.dots3 i { width: 6px; height: 6px; border-radius: 50%; background: var(--jb-green); }
+.dots3 i:nth-child(2) { background: var(--jb-brown); }
+
+/* Cards: white on paper, rule border, 24px corners, no shadow. */
+.card { background: #fff; border: var(--border-w) solid var(--jb-rule); border-radius: var(--radius-lg); }
+
+/* Buttons: uppercase, tracked. */
+.btn {
+  font-family: var(--font-body); font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
+  border: none; border-radius: var(--radius-sm); cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background-color .12s var(--ease), transform .12s var(--ease);
+}
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-primary { background: var(--jb-green); color: #fff; }
+.btn-primary:hover { background: var(--jb-green-700); }
+.btn-primary:active { background: var(--jb-green-800); }
+.btn-secondary { background: var(--jb-brown); color: #fff; }
+.btn-secondary:hover { background: var(--jb-brown-700); }
+.btn-secondary:active { background: var(--jb-brown-800); }
+.btn-outline { background: #fff; color: var(--jb-green-700); border: var(--border-w) solid var(--jb-green-300); }
+.btn-outline:hover { background: var(--jb-green-100); }
+.btn-ghost { background: transparent; color: var(--jb-gray-600); border: var(--border-w) solid var(--jb-rule); }
+.btn-ghost:hover { background: var(--jb-brown-100); }
+.btn-danger { background: #fff; color: var(--jb-danger); border: var(--border-w) solid #e7c4bb; }
+.btn-danger:hover { background: var(--jb-danger-bg); }
+
+/* Inputs */
+.input {
+  font-family: var(--font-body); font-size: 16px; color: var(--jb-ink);
+  padding: 10px 12px; border: var(--border-w) solid var(--jb-brown-300); border-radius: var(--radius-sm); background: #fff;
+}
+.input:focus { outline: none; border-color: var(--jb-green); box-shadow: var(--focus-ring); }
+
+/* Icons (Lucide outlines, drawn inline) */
+.ico { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* Logo with a text fallback if the image can't load */
+.logo-fallback { display: none; font-family: var(--font-display); color: var(--jb-brown); }

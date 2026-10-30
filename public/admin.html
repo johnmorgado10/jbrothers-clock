@@ -5,101 +5,145 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light only">
 <meta name="robots" content="noindex">
-<title>Shop Clock · Admin</title>
+<title>Shop Clock Admin · J-Brothers Landscaping</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css">
 <style>
-  :root { --green:#68801F; --green-dk:#55691A; --brown:#684500; --sage-lt:#DCE6B4; --paper:#F2F2F2; --panel:#F1F4E6; --border:#D6DEB8; --rule:#E4E0D9; --text:#2B2B2B; --red:#A3361F; --amber:#C98A12; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--paper); color:var(--text); font-family:"Instrument Sans", system-ui, sans-serif; font-size:16px; }
-  header { background:var(--brown); color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; }
-  header b { letter-spacing:.04em; }
-  header a { color:var(--sage-lt); font-size:14px; }
-  .wrap { max-width:720px; margin:0 auto; padding:18px 16px 60px; }
-  .card { background:#fff; border:1px solid var(--rule); border-radius:14px; padding:18px; margin-bottom:16px; }
-  h2 { margin:0 0 10px; font-size:19px; color:var(--brown); }
-  p { margin:0 0 12px; line-height:1.45; }
-  .muted { color:#777; font-size:14px; }
-  button, .btn { font-family:inherit; font-size:15px; font-weight:700; border:none; border-radius:10px; padding:10px 16px; background:var(--green); color:#fff; cursor:pointer; text-decoration:none; display:inline-block; }
-  button.alt { background:#fff; color:var(--green-dk); border:2px solid var(--border); }
-  button.danger { background:#fff; color:var(--red); border:2px solid #E7C4BB; }
-  button:disabled { opacity:.5; }
-  input { font-family:inherit; font-size:16px; padding:9px 10px; border:2px solid var(--border); border-radius:10px; }
-  input.pin { width:90px; text-align:center; letter-spacing:.2em; font-weight:700; }
-  table { width:100%; border-collapse:collapse; }
-  td { padding:9px 4px; border-top:1px solid var(--rule); vertical-align:middle; }
-  td:last-child { text-align:right; white-space:nowrap; }
-  .pill { display:inline-block; font-size:12px; font-weight:700; padding:3px 9px; border-radius:20px; background:var(--panel); color:var(--green-dk); }
-  .pill.bad { background:#F7E3DE; color:var(--red); }
-  .note { padding:10px 12px; border-radius:10px; margin-bottom:12px; font-weight:600; }
-  .note.err { background:#F7E3DE; color:var(--red); }
-  .note.ok { background:var(--panel); color:var(--green-dk); }
-  .flag { border-left:4px solid var(--amber); padding:8px 10px; margin-bottom:8px; background:#FBF4E6; border-radius:6px; }
-  .hidden { display:none !important; }
-  .inline { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  body { font-size: 16px; line-height: 1.6; }
+  header {
+    position: sticky; top: 0; z-index: 5; background: rgba(255, 255, 255, .96); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 3px solid var(--jb-rule); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  header .brand { display: flex; align-items: center; gap: 14px; }
+  header img { width: 76px; height: auto; display: block; }
+  header .logo-fallback { font-size: 22px; }
+  header a { color: var(--jb-green-700); font-weight: 700; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  header a:hover { color: var(--jb-brown); }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 72px; }
+  .intro { text-align: center; margin-bottom: 28px; }
+  .intro h1 { font-size: 46px; line-height: 1.1; color: var(--jb-brown); margin: 10px 0 0; }
+  .intro .dots3 { margin-top: 14px; }
+
+  .card { padding: 24px; margin-bottom: 18px; }
+  .card .label { display: block; margin-bottom: 8px; }
+  .card h2 { font-size: 30px; line-height: 1.1; color: var(--jb-brown); margin: 0 0 10px; }
+  p { margin: 0 0 14px; }
+  .muted { color: var(--jb-gray-600); font-size: 14px; }
+  a { color: var(--jb-green-700); }
+  a:hover { color: var(--jb-brown); }
+
+  .btn { font-size: 13px; padding: 12px 18px; min-height: 44px; }
+  .input.pin { width: 96px; text-align: center; letter-spacing: .3em; font-weight: 700; }
+  .input.pin.wide { width: 150px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 12px 4px; border-top: var(--border-w) solid var(--jb-rule); vertical-align: middle; }
+  td:last-child { text-align: right; white-space: nowrap; }
+  .name { font-weight: 600; }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; padding: 5px 11px; border-radius: var(--radius-pill); background: var(--jb-green-100); color: var(--jb-green-800); }
+  .badge.bad { background: var(--jb-danger-bg); color: var(--jb-danger); }
+  .badge.soft { background: var(--jb-brown-100); color: var(--jb-brown); }
+
+  .note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 16px; font-weight: 600; }
+  .note .ico { font-size: 20px; margin-top: 2px; }
+  .note.err { background: var(--jb-danger-bg); color: var(--jb-danger); }
+  .note.ok { background: var(--jb-green-100); color: var(--jb-green-800); }
+
+  .flag { border-left: 5px solid var(--jb-warning); padding: 12px 14px; margin-bottom: 10px; background: var(--jb-warning-bg); border-radius: var(--radius-sm); }
+  .flag .name { color: var(--jb-brown); }
+
+  .hidden { display: none !important; }
+  .inline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .rule { height: 3px; background: var(--jb-rule); border: 0; margin: 18px 0; }
 </style>
 </head>
 <body>
-<header><b>J-BROTHERS · Shop Clock Admin</b><a href="/">Open clock →</a></header>
+<header>
+  <div class="brand">
+    <img src="https://files.copilotcrm.com/8544/1792625031_d219866faeeb1.png" alt="J-Brothers Landscaping LLC"
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    <div class="logo-fallback">J-Brothers</div>
+  </div>
+  <a href="/">Open clock <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+</header>
+
 <div class="wrap">
+  <div class="intro">
+    <div class="tagline">Shop Clock</div>
+    <h1 class="serif">Clock <em>admin</em></h1>
+    <div class="dots3"><i></i><i></i><i></i></div>
+  </div>
+
   <div id="note"></div>
 
   <!-- Homeworks connection -->
   <div class="card" id="c-conn">
-    <h2>Homeworks connection</h2>
+    <span class="label">Connection</span>
+    <h2 class="serif">Homeworks</h2>
     <p id="conn-text" class="muted">Checking…</p>
-    <a class="btn" id="conn-btn" href="/api/oauth/start">Connect Homeworks</a>
+    <a class="btn btn-primary" id="conn-btn" href="/api/oauth/start">Connect Homeworks</a>
   </div>
 
   <!-- Sign in -->
   <div class="card hidden" id="c-login">
-    <h2>Sign in</h2>
+    <span class="label">Admin</span>
+    <h2 class="serif">Sign <em>in</em></h2>
     <div class="inline">
-      <input id="login-pin" type="password" inputmode="numeric" maxlength="8" placeholder="Admin PIN" class="pin" style="width:140px">
-      <button id="login-btn">Sign in</button>
+      <input class="input pin wide" id="login-pin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN">
+      <button class="btn btn-primary" id="login-btn">Sign in</button>
     </div>
-    <p class="muted" style="margin-top:12px">Forgot it? Tap <b>Reconnect Homeworks</b> above and log in with the owner account. That signs you in too.</p>
+    <p class="muted" style="margin:14px 0 0">Forgot it? Tap <b>Reconnect Homeworks</b> above and log in with the owner account. That signs you in too.</p>
   </div>
 
   <!-- First-time admin PIN -->
   <div class="card hidden" id="c-setpin">
-    <h2>Pick an admin PIN</h2>
-    <p>You'll use this to get back into this screen. 4–8 digits, and different from everyone's clock PIN.</p>
+    <span class="label">Step 2</span>
+    <h2 class="serif">Pick an <em>admin PIN</em></h2>
+    <p>You'll use this to get back into this screen. Use 4–8 digits, different from everyone's clock PIN.</p>
     <div class="inline">
-      <input id="new-admin-pin" type="password" inputmode="numeric" maxlength="8" class="pin" style="width:140px">
-      <button id="set-admin-pin">Save admin PIN</button>
+      <input class="input pin wide" id="new-admin-pin" type="password" inputmode="numeric" maxlength="8">
+      <button class="btn btn-primary" id="set-admin-pin">Save admin PIN</button>
     </div>
   </div>
 
   <div id="signed-in" class="hidden">
     <div class="card" id="c-flags">
-      <h2>Needs attention</h2>
+      <span class="label">Needs attention</span>
+      <h2 class="serif">Lunch <em>to fix</em></h2>
       <div id="flags"></div>
     </div>
 
     <div class="card">
-      <h2>Employee PINs</h2>
+      <span class="label">Crew</span>
+      <h2 class="serif">Employee <em>PINs</em></h2>
       <p class="muted">Each person types their PIN at the shop tablet to clock in or out. Leave a PIN blank to take someone off the clock.</p>
       <table id="emps"><tr><td class="muted">Loading…</td></tr></table>
-      <p style="margin-top:14px"><button class="alt" id="gen">Make PINs for everyone who doesn't have one</button></p>
+      <hr class="rule">
+      <button class="btn btn-outline" id="gen">Make PINs for everyone without one</button>
     </div>
 
     <div class="card">
-      <h2>Shop tablet</h2>
+      <span class="label">Devices</span>
+      <h2 class="serif">Shop <em>tablet</em></h2>
       <p id="this-device" class="muted"></p>
       <div class="inline" id="add-device-row">
-        <input id="device-label" placeholder="Name, e.g. Shop iPad" value="Shop tablet">
-        <button id="add-device">Make this device the shop clock</button>
+        <input class="input" id="device-label" placeholder="Name, e.g. Shop iPad" value="Shop tablet">
+        <button class="btn btn-primary" id="add-device">Make this the shop clock</button>
       </div>
-      <table id="devices" style="margin-top:12px"></table>
+      <table id="devices" style="margin-top:14px"></table>
     </div>
 
     <div class="card">
-      <h2>Admin PIN</h2>
+      <span class="label">Security</span>
+      <h2 class="serif">Admin <em>PIN</em></h2>
       <div class="inline">
-        <input id="chg-admin-pin" type="password" inputmode="numeric" maxlength="8" class="pin" style="width:140px" placeholder="New PIN">
-        <button class="alt" id="chg-admin">Change admin PIN</button>
-        <button class="alt" id="signout">Sign out</button>
+        <input class="input pin wide" id="chg-admin-pin" type="password" inputmode="numeric" maxlength="8" placeholder="New PIN">
+        <button class="btn btn-outline" id="chg-admin">Change admin PIN</button>
+        <button class="btn btn-ghost" id="signout">Sign out</button>
       </div>
     </div>
   </div>
@@ -111,8 +155,13 @@ const fmt = (d) => new Date(d).toLocaleString("en-US", { timeZone: "America/New_
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const ss = { get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch {} } };
 const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
+const ICON_OK = '<svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICON_ERR = '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>';
 
-function note(text, kind = "ok") { $("note").innerHTML = text ? `<div class="note ${kind}">${esc(text)}</div>` : ""; if (text) scrollTo(0, 0); }
+function note(text, kind = "ok") {
+  $("note").innerHTML = text ? `<div class="note ${kind}">${kind === "err" ? ICON_ERR : ICON_OK}<span>${esc(text)}</span></div>` : "";
+  if (text) scrollTo(0, 0);
+}
 
 async function api(path, body) {
   const res = await fetch(`/api/${path}`, {
@@ -138,13 +187,13 @@ async function load() {
   status = await api("admin/status");
   const hwc = status.homeworks;
   if (hwc.connected) {
-    $("conn-text").innerHTML = `<span class="pill">Connected</span> as ${esc(hwc.connectedAs || "owner")} · last renewed ${fmt(hwc.refreshedAt)}`;
+    $("conn-text").innerHTML = `<span class="badge">Connected</span> as ${esc(hwc.connectedAs || "owner")} · last renewed ${fmt(hwc.refreshedAt)}`;
     $("conn-btn").textContent = "Reconnect Homeworks";
-    $("conn-btn").className = "btn alt";
+    $("conn-btn").className = "btn btn-outline";
   } else if (hwc.error) {
-    $("conn-text").innerHTML = `<span class="pill bad">Disconnected</span> The connection expired. Tap Reconnect and log in with the owner account. The clock won't work until you do.`;
+    $("conn-text").innerHTML = `<span class="badge bad">Disconnected</span> The connection expired. Tap Reconnect and log in with the owner account. The clock won't work until you do.`;
     $("conn-btn").textContent = "Reconnect Homeworks";
-    $("conn-btn").className = "btn";
+    $("conn-btn").className = "btn btn-primary";
   } else {
     $("conn-text").textContent = "Step 1: connect to Homeworks. Log in with the owner account and approve. You only do this once.";
   }
@@ -166,27 +215,27 @@ async function loadAdmin() {
   if (emps.error) $("emps").innerHTML = `<tr><td class="muted">${esc(emps.error)}</td></tr>`;
   else $("emps").innerHTML = emps.employees.map((e) => `
     <tr data-id="${e.id}" data-name="${esc(e.name)}">
-      <td><b>${esc(e.name)}</b>${e.role === "OWNER" ? ' <span class="muted">(owner)</span>' : ""}</td>
-      <td><input class="pin" maxlength="4" inputmode="numeric" value="${esc(e.pin)}" placeholder="—"></td>
-      <td><button class="alt save">Save</button></td>
+      <td><span class="name">${esc(e.name)}</span>${e.role === "OWNER" ? ' <span class="badge soft">Owner</span>' : ""}</td>
+      <td><input class="input pin" maxlength="4" inputmode="numeric" value="${esc(e.pin)}" placeholder="—"></td>
+      <td><button class="btn btn-outline save">Save</button></td>
     </tr>`).join("");
 
   const mine = ls.get("kioskDeviceId");
   const mineListed = devs.devices.some((d) => d.id === mine);
   $("this-device").innerHTML = mineListed
-    ? `<span class="pill">This device is the shop clock</span> <a href="/">Open the clock</a>`
+    ? `<span class="badge">This device is the shop clock</span> &nbsp;<a href="/">Open the clock</a>`
     : "This device isn't the shop clock. Open this page on the shop tablet and tap the button below.";
   $("add-device-row").classList.toggle("hidden", mineListed);
   $("devices").innerHTML = devs.devices.map((d) => `
-    <tr><td><b>${esc(d.label)}</b> <span class="muted">added ${fmt(d.addedAt)}</span>${d.id === mine ? ' <span class="pill">this one</span>' : ""}</td>
-    <td><button class="danger rm" data-id="${d.id}">Remove</button></td></tr>`).join("");
+    <tr><td><span class="name">${esc(d.label)}</span> <span class="muted">added ${fmt(d.addedAt)}</span>${d.id === mine ? ' <span class="badge">This one</span>' : ""}</td>
+    <td><button class="btn btn-danger rm" data-id="${d.id}">Remove</button></td></tr>`).join("");
 
   $("c-flags").classList.toggle("hidden", !flags.flags.length);
   $("flags").innerHTML = flags.flags.map((f) => `
-    <div class="flag"><b>${esc(f.name)}</b> · ${fmt(f.at)}<br>
+    <div class="flag"><span class="name">${esc(f.name)}</span> · ${fmt(f.at)}<br>
     Said yes to lunch, but 30 min couldn't be taken off automatically. Fix it in Homeworks.<br>
     <span class="muted">${esc(f.reason)}</span><br>
-    <button class="alt dismiss" data-id="${f.id}" style="margin-top:6px">Done, dismiss</button></div>`).join("");
+    <button class="btn btn-outline dismiss" data-id="${f.id}" style="margin-top:10px">Done, dismiss</button></div>`).join("");
 }
 
 $("login-btn").onclick = async () => {

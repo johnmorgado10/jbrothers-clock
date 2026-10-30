@@ -5,128 +5,183 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Shop Clock">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
 <meta name="color-scheme" content="light only">
-<title>J-Brothers Shop Clock</title>
+<title>Shop Clock · J-Brothers Landscaping</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css">
 <style>
-  :root { --green:#68801F; --green-dk:#55691A; --brown:#684500; --sage:#ADB989; --sage-lt:#DCE6B4; --paper:#F2F2F2; --panel:#F1F4E6; --text:#2B2B2B; --red:#A3361F; }
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
-  html, body { margin:0; height:100%; background:var(--paper); color:var(--text); font-family:"Instrument Sans", system-ui, sans-serif; overflow:hidden; }
-  body { display:flex; flex-direction:column; }
-  header { background:var(--brown); color:#fff; padding:14px 22px; display:flex; justify-content:space-between; align-items:center; }
-  header .brand { font-weight:800; letter-spacing:.04em; font-size:18px; }
-  header .brand span { color:var(--sage-lt); font-weight:600; }
-  header .date { font-size:15px; color:var(--sage-lt); }
-  main { flex:1; display:flex; align-items:center; justify-content:center; padding:18px; }
-  .screen { display:none; width:100%; max-width:440px; text-align:center; }
-  .screen.on { display:block; }
-  .clock { font-size:64px; font-weight:800; color:var(--brown); line-height:1; margin-bottom:6px; font-variant-numeric:tabular-nums; }
-  .hint { font-size:17px; color:#555; margin-bottom:16px; }
-  .hint small { display:block; color:#888; font-size:14px; }
-  .dots { display:flex; gap:14px; justify-content:center; margin:6px 0 18px; }
-  .dot { width:20px; height:20px; border-radius:50%; border:2px solid var(--green); }
-  .dot.full { background:var(--green); }
-  .shake { animation:shake .35s; }
-  @keyframes shake { 20%,60%{transform:translateX(-10px)} 40%,80%{transform:translateX(10px)} }
-  .pad { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-  .pad button { height:76px; font-size:30px; font-weight:700; border:none; border-radius:16px; background:#fff; color:var(--text); box-shadow:0 2px 0 #D6DEB8; font-family:inherit; }
-  .pad button:active { background:var(--panel); transform:translateY(1px); }
-  .pad .muted { font-size:17px; color:#777; }
-  .msg { min-height:24px; margin-top:14px; color:var(--red); font-weight:600; }
-  h1 { font-size:38px; margin:0 0 6px; color:var(--brown); }
-  .status { font-size:19px; margin-bottom:26px; color:#555; }
-  .status b { color:var(--green-dk); }
-  .big { display:block; width:100%; padding:26px 10px; font-size:30px; font-weight:800; border:none; border-radius:18px; color:#fff; font-family:inherit; margin-bottom:12px; }
-  .big small { display:block; font-size:16px; font-weight:600; opacity:.85; }
-  .big.in { background:var(--green); }
-  .big.out { background:var(--brown); }
-  .big:disabled { opacity:.5; }
-  .ghost { background:none; border:2px solid #bbb; color:#555; border-radius:14px; padding:14px; width:100%; font-size:18px; font-weight:600; font-family:inherit; }
-  .check { width:96px; height:96px; border-radius:50%; background:var(--green); color:#fff; font-size:56px; line-height:96px; margin:0 auto 16px; }
-  .check.warn { background:#C98A12; }
-  .overlay { position:fixed; inset:0; background:rgba(43,43,43,.55); display:none; align-items:center; justify-content:center; padding:20px; }
-  .overlay.on { display:flex; }
-  .modal { background:#fff; border-radius:20px; padding:26px 22px; max-width:420px; width:100%; text-align:center; }
-  .modal h2 { margin:0 0 4px; font-size:28px; color:var(--brown); }
-  .modal p { margin:0 0 20px; color:#666; }
-  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
-  .row .big { margin:0; font-size:26px; padding:22px 6px; }
-  .gear { position:fixed; right:12px; bottom:10px; color:#aaa; font-size:13px; text-decoration:none; }
-  .setup { color:#666; font-size:18px; line-height:1.5; }
+  html, body { height: 100%; overflow: hidden; }
+  * { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  body { display: flex; flex-direction: column; }
+
+  /* Thick green / brown edge bars, as on the style guide's pages. */
+  body::before, body::after { content: ""; position: fixed; top: 0; bottom: 0; width: 8px; z-index: 5; }
+  body::before { left: 0; background: var(--jb-green); }
+  body::after { right: 0; background: var(--jb-brown); }
+
+  header { background: #fff; border-bottom: 3px solid var(--jb-rule); padding: 18px 24px 14px; text-align: center; }
+  header img { width: 150px; height: auto; display: block; margin: 0 auto; }
+  header .logo-fallback { font-size: 34px; }
+
+  main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px 28px 28px; }
+  .screen { display: none; width: 100%; max-width: 460px; text-align: center; }
+  .screen.on { display: block; animation: fade .24s var(--ease); }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .tagline { margin-bottom: 14px; }
+  .clock { font-size: 104px; line-height: 1; color: var(--jb-brown); font-variant-numeric: tabular-nums; }
+  .clock .ampm { font-size: 34px; margin-left: 8px; color: var(--jb-green-700); letter-spacing: .06em; }
+  .date { margin: 12px 0 26px; }
+
+  .pin-card { padding: 26px 24px 22px; }
+  .prompt { font-size: 30px; line-height: 1.1; color: var(--jb-brown); margin: 0; }
+  .prompt-es { font-size: 20px; color: #9a8b6b; margin: 2px 0 0; }
+  .pin-dots { display: flex; gap: 16px; justify-content: center; margin: 20px 0 22px; }
+  .pin-dots div { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--jb-green); transition: background-color .12s var(--ease); }
+  .pin-dots div.full { background: var(--jb-green); }
+  .shake { animation: shake .35s; }
+  @keyframes shake { 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
+
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .pad button {
+    height: 74px; border: var(--border-w) solid var(--jb-rule); border-radius: var(--radius-md); background: var(--jb-paper);
+    font-family: var(--font-body); font-size: 30px; font-weight: 600; color: var(--jb-ink);
+    display: flex; align-items: center; justify-content: center; transition: background-color .12s var(--ease);
+  }
+  .pad button:active { background: var(--jb-green-100); border-color: var(--jb-green-300); transform: translateY(1px); }
+  .pad .fn { font-size: 13px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--jb-gray-600); background: #fff; }
+  .pad .fn .ico { font-size: 28px; }
+
+  .msg { min-height: 22px; margin-top: 14px; color: var(--jb-danger); font-weight: 600; font-size: 15px; }
+
+  .title { font-size: 56px; line-height: 1.05; color: var(--jb-brown); margin: 6px 0 0; }
+  .sub { font-size: 24px; line-height: 1.25; color: #8a7448; margin: 4px 0 4px; }
+  .sub-es { font-size: 15px; color: var(--jb-gray-600); margin: 0 0 22px; }
+  .dots3 { margin: 18px 0 26px; }
+
+  .big { width: 100%; padding: 22px 12px; font-size: 22px; letter-spacing: .16em; border-radius: var(--radius-md); flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .big .ico { font-size: 30px; }
+  .big small { font-size: 12px; letter-spacing: .3em; opacity: .85; font-weight: 600; }
+  .ghost-wide { width: 100%; padding: 16px; font-size: 14px; border-radius: var(--radius-md); }
+
+  .done-mark { width: 104px; height: 104px; border-radius: 50%; background: var(--jb-green); color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; }
+  .done-mark .ico { font-size: 54px; stroke-width: 2.5; }
+  .done-mark.warn { background: var(--jb-warning); }
+  .done-note { margin-top: 18px; padding: 14px 16px; border-radius: var(--radius-md); background: var(--jb-green-100); color: var(--jb-green-800); font-weight: 600; font-size: 15px; line-height: 1.45; }
+  .done-note.warn { background: var(--jb-warning-bg); color: #7a5410; }
+
+  .setup-text { color: var(--jb-gray-600); font-size: 17px; line-height: 1.6; }
+
+  .overlay { position: fixed; inset: 0; z-index: 10; background: rgba(28, 26, 20, .5); display: none; align-items: center; justify-content: center; padding: 24px; }
+  .overlay.on { display: flex; animation: fade .2s var(--ease); }
+  .dialog { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 30px 24px 22px; max-width: 440px; width: 100%; text-align: center; }
+  .dialog .title { font-size: 42px; }
+  .dialog .sub { font-size: 22px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0 12px; }
+  .row .big { margin: 0; }
+
+  .admin-link { position: fixed; right: 20px; bottom: 12px; font-size: 11px; color: var(--jb-gray-400); text-decoration: none; }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">J-BROTHERS <span>Shop Clock</span></div>
-  <div class="date" id="date"></div>
+  <img src="https://files.copilotcrm.com/8544/1792625031_d219866faeeb1.png" alt="J-Brothers Landscaping LLC"
+       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+  <div class="logo-fallback">J-Brothers Landscaping</div>
 </header>
 
 <main>
   <!-- PIN entry -->
   <section class="screen on" id="s-pin">
-    <div class="clock" id="clock">--:--</div>
-    <div class="hint">Enter your 4-digit PIN<small>Ingrese su PIN de 4 dígitos</small></div>
-    <div class="dots" id="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    <div class="pad" id="pad">
-      <button>1</button><button>2</button><button>3</button>
-      <button>4</button><button>5</button><button>6</button>
-      <button>7</button><button>8</button><button>9</button>
-      <button class="muted" data-k="clear">Clear</button><button>0</button><button class="muted" data-k="back">⌫</button>
+    <div class="tagline">Shop Clock</div>
+    <div class="clock serif" id="clock">--:--</div>
+    <div class="label date" id="date"></div>
+    <div class="card pin-card">
+      <p class="prompt serif">Enter your <em>PIN</em></p>
+      <p class="prompt-es serif">Ingrese su PIN de 4 dígitos</p>
+      <div class="pin-dots" id="dots"><div></div><div></div><div></div><div></div></div>
+      <div class="pad" id="pad">
+        <button>1</button><button>2</button><button>3</button>
+        <button>4</button><button>5</button><button>6</button>
+        <button>7</button><button>8</button><button>9</button>
+        <button class="fn" data-k="clear">Clear</button><button>0</button>
+        <button class="fn" data-k="back" aria-label="Delete"><svg class="ico" viewBox="0 0 24 24"><path d="M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6"/><path d="m18 9-6 6"/></svg></button>
+      </div>
+      <div class="msg" id="pin-msg"></div>
     </div>
-    <div class="msg" id="pin-msg"></div>
   </section>
 
   <!-- Choose action -->
   <section class="screen" id="s-action">
-    <h1 id="hello">Hi</h1>
-    <div class="status" id="status"></div>
-    <button class="big in" id="btn-in">Clock In<small>Entrada</small></button>
-    <button class="big out" id="btn-out">Clock Out<small>Salida</small></button>
-    <button class="ghost" id="btn-cancel">Cancel · Cancelar</button>
+    <div class="label">Good to see you</div>
+    <h1 class="title serif" id="hello">Hi</h1>
+    <p class="sub serif" id="status"></p>
+    <p class="sub-es" id="status-es"></p>
+    <button class="btn btn-primary big" id="btn-in">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
+      Clock In<small>Entrada</small>
+    </button>
+    <button class="btn btn-secondary big" id="btn-out">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      Clock Out<small>Salida</small>
+    </button>
+    <button class="btn btn-ghost ghost-wide" id="btn-cancel">Cancel · Cancelar</button>
     <div class="msg" id="action-msg"></div>
   </section>
 
   <!-- Done -->
   <section class="screen" id="s-done">
-    <div class="check" id="done-icon">✓</div>
-    <h1 id="done-title"></h1>
-    <div class="status" id="done-text"></div>
+    <div class="done-mark" id="done-icon"></div>
+    <h1 class="title serif" id="done-title"></h1>
+    <p class="sub serif" id="done-text"></p>
+    <p class="sub-es" id="done-es"></p>
+    <div class="done-note hidden" id="done-note" style="display:none"></div>
   </section>
 
   <!-- Device not set up -->
   <section class="screen" id="s-setup">
-    <h1>Not set up</h1>
-    <p class="setup">This device isn't set up as the shop clock.<br>An admin can set it up from the admin screen.</p>
+    <div class="label">Shop Clock</div>
+    <h1 class="title serif">Not <em>set up</em> yet</h1>
+    <div class="dots3"><i></i><i></i><i></i></div>
+    <p class="setup-text">This device isn't set up as the shop clock.<br>An admin can set it up from the admin screen.</p>
   </section>
 </main>
 
 <div class="overlay" id="lunch">
-  <div class="modal">
-    <h2>Did you take lunch?</h2>
-    <p>¿Tomó almuerzo?<br><small>Yes takes 30 minutes off today's hours.</small></p>
+  <div class="dialog">
+    <div class="label">Before you go</div>
+    <h2 class="title serif">Did you take <em>lunch?</em></h2>
+    <p class="sub serif">¿Tomó almuerzo?</p>
+    <p class="sub-es" style="margin:6px 0 0">Yes takes 30 minutes off today's hours.<br>Sí descuenta 30 minutos de hoy.</p>
     <div class="row">
-      <button class="big in" id="lunch-yes">Yes<small>Sí</small></button>
-      <button class="big out" id="lunch-no">No<small>No</small></button>
+      <button class="btn btn-primary big" id="lunch-yes">Yes<small>Sí</small></button>
+      <button class="btn btn-secondary big" id="lunch-no">No<small>No</small></button>
     </div>
-    <button class="ghost" id="lunch-cancel">Go back · Regresar</button>
+    <button class="btn btn-ghost ghost-wide" id="lunch-cancel">Go back · Regresar</button>
   </div>
 </div>
 
-<a class="gear" href="/admin.html">Admin</a>
+<a class="admin-link label" href="/admin.html">Admin</a>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const TZ = "America/New_York";
 const fmtTime = (d) => new Date(d).toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+const ICON_CHECK = '<svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICON_WARN = '<svg class="ico" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 let device = null;
 try { device = localStorage.getItem("kioskDevice"); } catch {}
 let pin = "", current = null, idleTimer = null, busy = false;
 
 function tick() {
   const now = new Date();
-  $("clock").textContent = fmtTime(now);
+  const [hm, ap] = fmtTime(now).split(/\s/);
+  $("clock").innerHTML = `${hm}<span class="ampm">${ap || ""}</span>`;
   $("date").textContent = now.toLocaleDateString("en-US", { timeZone: TZ, weekday: "long", month: "long", day: "numeric" });
 }
 tick(); setInterval(tick, 1000);
@@ -135,7 +190,7 @@ function show(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === id));
   clearTimeout(idleTimer);
   if (id === "s-action") idleTimer = setTimeout(reset, 25000);
-  if (id === "s-done") idleTimer = setTimeout(reset, 5000);
+  if (id === "s-done") idleTimer = setTimeout(reset, 6000);
 }
 function reset() {
   pin = ""; current = null; busy = false;
@@ -165,7 +220,7 @@ $("pad").addEventListener("click", (e) => {
   $("pin-msg").textContent = "";
   if (b.dataset.k === "clear") pin = "";
   else if (b.dataset.k === "back") pin = pin.slice(0, -1);
-  else if (pin.length < 4) pin += b.textContent;
+  else if (pin.length < 4) pin += b.textContent.trim();
   drawDots();
   if (pin.length === 4) lookup();
 });
@@ -176,11 +231,15 @@ async function lookup() {
     const r = await api("kiosk/lookup", { pin });
     current = r;
     $("hello").textContent = `Hi, ${r.name.split(" ")[0]}`;
-    $("status").innerHTML = r.clockedIn
-      ? `You're <b>clocked in</b> since ${fmtTime(r.since)}<br><small>Está registrado desde ${fmtTime(r.since)}</small>`
-      : `You're <b>clocked out</b><br><small>No está registrado</small>`;
-    $("btn-in").style.display = r.clockedIn ? "none" : "block";
-    $("btn-out").style.display = r.clockedIn ? "block" : "none";
+    if (r.clockedIn) {
+      $("status").innerHTML = `You're <em>clocked in</em> since ${fmtTime(r.since)}`;
+      $("status-es").textContent = `Está registrado desde ${fmtTime(r.since)}`;
+    } else {
+      $("status").innerHTML = `You're <em>clocked out</em> right now`;
+      $("status-es").textContent = "No está registrado";
+    }
+    $("btn-in").style.display = r.clockedIn ? "none" : "flex";
+    $("btn-out").style.display = r.clockedIn ? "flex" : "none";
     show("s-action");
   } catch (err) {
     $("pin-msg").textContent = err.message;
@@ -188,6 +247,13 @@ async function lookup() {
     setTimeout(() => $("dots").classList.remove("shake"), 400);
     pin = ""; drawDots();
   } finally { busy = false; }
+}
+
+function doneNote(text, warn) {
+  const n = $("done-note");
+  n.style.display = text ? "block" : "none";
+  n.className = "done-note" + (warn ? " warn" : "");
+  n.innerHTML = text || "";
 }
 
 async function clock(action, lunch) {
@@ -199,19 +265,21 @@ async function clock(action, lunch) {
     const r = await api("kiosk/clock", { pin, action, lunch });
     $("lunch").classList.remove("on");
     const first = r.name.split(" ")[0];
-    $("done-icon").className = "check"; $("done-icon").textContent = "✓";
+    $("done-icon").className = "done-mark"; $("done-icon").innerHTML = ICON_CHECK;
+    doneNote("");
     if (action === "in") {
-      $("done-title").textContent = r.already ? `${first}, you're already in` : `Clocked in, ${first}`;
-      $("done-text").innerHTML = r.already ? "Ya estaba registrado." : `${fmtTime(r.at)} · Have a good day! ¡Buen día!`;
+      $("done-title").textContent = r.already ? "Already clocked in" : `Clocked in, ${first}`;
+      $("done-text").innerHTML = r.already ? "You were <em>already</em> on the clock" : `${fmtTime(r.at)} · Have a <em>good day</em>`;
+      $("done-es").textContent = r.already ? "Ya estaba registrado." : "¡Que tenga buen día!";
     } else {
-      $("done-title").textContent = r.already ? `${first}, you weren't clocked in` : `Clocked out, ${first}`;
-      let t = r.already ? "No estaba registrado." : `${fmtTime(r.at)} · See you tomorrow! ¡Hasta mañana!`;
-      if (r.lunch && r.lunch.ok) t += "<br>30 min lunch taken off. · 30 min de almuerzo descontados.";
+      $("done-title").textContent = r.already ? "Not clocked in" : `Clocked out, ${first}`;
+      $("done-text").innerHTML = r.already ? "You <em>weren't</em> on the clock" : `${fmtTime(r.at)} · See you <em>tomorrow</em>`;
+      $("done-es").textContent = r.already ? "No estaba registrado." : "¡Hasta mañana!";
+      if (r.lunch && r.lunch.ok) doneNote("30 min lunch taken off today.<br>30 min de almuerzo descontados.");
       if (r.lunch && !r.lunch.ok) {
-        $("done-icon").className = "check warn"; $("done-icon").textContent = "!";
-        t += "<br>Lunch couldn't be taken off automatically. The office will fix it.";
+        $("done-icon").className = "done-mark warn"; $("done-icon").innerHTML = ICON_WARN;
+        doneNote("Lunch couldn't be taken off automatically. The office will fix it.<br>La oficina corregirá el almuerzo.", true);
       }
-      $("done-text").innerHTML = t;
     }
     show("s-done");
   } catch (err) {
