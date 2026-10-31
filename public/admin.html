@@ -85,7 +85,10 @@
          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
     <div class="logo-fallback">J-Brothers</div>
   </div>
-  <a href="/">Open clock <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+  <nav style="display:flex;gap:18px">
+    <a href="/payroll.html" id="nav-payroll" class="hidden">Payroll</a>
+    <a href="/">Open clock <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+  </nav>
 </header>
 
 <div class="wrap">
@@ -135,6 +138,13 @@
   </div>
 
   <div id="signed-in" class="hidden">
+    <div class="card">
+      <span class="label">Pay</span>
+      <h2 class="serif">Weekly <em>payroll</em></h2>
+      <p class="muted">Hours by day, lunch, pay and check amounts for each week, plus crew averages.</p>
+      <a class="btn btn-primary" href="/payroll.html">Open payroll</a>
+    </div>
+
     <div class="card" id="c-flags">
       <span class="label">Needs attention</span>
       <h2 class="serif">Lunch <em>to fix</em></h2>
@@ -226,6 +236,7 @@ async function load() {
   $("c-login").classList.toggle("hidden", !!session || !status.hasAdminPin);
   $("c-setpin").classList.toggle("hidden", !session || status.hasAdminPin);
   $("signed-in").classList.toggle("hidden", !session || !status.hasAdminPin);
+  $("nav-payroll").classList.toggle("hidden", !session || !status.hasAdminPin);
   if (session && status.hasAdminPin) await loadAdmin();
 }
 

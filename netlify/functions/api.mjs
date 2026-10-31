@@ -5,6 +5,7 @@ import {
   lockedFor, recordFailure, clearFailures,
 } from "../lib/security.mjs";
 import * as hw from "../lib/homeworks.mjs";
+import { payrollWeek, averages, defaultWeek, addDays } from "../lib/payroll.mjs";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -30,7 +31,15 @@ async function addFlag(flag) {
   await setJSON("flags", flags.slice(0, 200));
 }
 
-// ---------- kiosk (shop tablet) ----------
+// ---------- kiosk (shop tablet + phones) ----------
+// The registered shop device can clock in and out. Any other device (a crew member's
+// phone opening the same link) can only look someone up by PIN and clock them OUT.
+
+const PHONE_LIMIT = { max: 5, lockMs: 5 * 60_000 };       // per phone/connection
+const ALL_PHONES_LIMIT = { max: 25, lockMs: 10 * 60_000 }; // across all phones, in case of guessing
+
+const MSG_SHOP_ONLY = "Clock in at the shop clock. You can only clock out from this page.";
+const MSG_SHOP_ONLY_ES = "Ficha entrada en el reloj del taller. Desde aquí solo puedes fichar salida.";
 
 async function kioskDevice(req) {
   const token = req.headers.get("x-device-token");
@@ -39,37 +48,58 @@ async function kioskDevice(req) {
   return cfg.devices.find((d) => d.hash === sha256(token)) || null;
 }
 
-async function findByPin(pin, deviceId) {
-  const wait = await lockedFor(`device:${deviceId}`);
+function clientKey(req, context) {
+  const ip = context?.ip || req.headers.get("x-nf-client-connection-ip") || req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+  return `phone:${sha256(ip).slice(0, 16)}`;
+}
+
+async function findByPin(pin, lockKey, isShop) {
+  let wait = await lockedFor(lockKey);
+  if (!wait && !isShop) wait = await lockedFor("phones:all");
   if (wait) return { error: `Too many wrong PINs. Try again in ${wait} seconds. · Demasiados intentos. Espera ${wait} segundos.`, status: 429 };
   const cfg = await getConfig();
   const hit = Object.entries(cfg.pins).find(([, v]) => v.pin === String(pin));
   if (!hit) {
-    await recordFailure(`device:${deviceId}`);
+    if (isShop) await recordFailure(lockKey);
+    else {
+      await recordFailure(lockKey, PHONE_LIMIT);
+      await recordFailure("phones:all", ALL_PHONES_LIMIT);
+    }
     return { error: "PIN not recognized. · PIN no reconocido.", status: 401 };
   }
-  await clearFailures(`device:${deviceId}`);
+  await clearFailures(lockKey);
   return { userId: Number(hit[0]), name: hit[1].name };
 }
 
-async function kiosk(req, path) {
+// Small log of kiosk punches so payroll knows who answered "No" to lunch.
+async function logPunch(entry) {
+  const log = await getJSON("punches", []);
+  log.push({ at: new Date().toISOString(), ...entry });
+  const cutoff = Date.now() - 400 * 86400_000; // keep about 13 months
+  await setJSON("punches", log.filter((p) => Date.parse(p.at) > cutoff));
+}
+
+async function kiosk(req, path, context) {
   const device = await kioskDevice(req);
-  if (!device) return json({ error: "This device isn't set up as the shop clock.", notSetUp: true }, 403);
+  const isShop = !!device;
+  const lockKey = isShop ? `device:${device.id}` : clientKey(req, context);
   const body = await req.json().catch(() => ({}));
 
-  if (path === "kiosk/check") return json({ ok: true, label: device.label });
+  if (path === "kiosk/check") return json({ ok: true, shop: isShop, label: device?.label });
 
-  const who = await findByPin(body.pin, device.id);
+  const who = await findByPin(body.pin, lockKey, isShop);
   if (who.error) return json({ error: who.error }, who.status);
 
   if (path === "kiosk/lookup") {
     const since = await hw.clockedInSince(who.userId);
-    return json({ name: who.name, clockedIn: !!since, since });
+    return json({ name: who.name, clockedIn: !!since, since, canClockIn: isShop });
   }
 
   if (path === "kiosk/clock") {
     if (body.action === "in") {
+      if (!isShop) return json({ error: MSG_SHOP_ONLY, errorEs: MSG_SHOP_ONLY_ES, shopOnly: true }, 403);
       const r = await hw.clockIn(who.userId);
+      if (r) await logPunch({ userId: who.userId, action: "in", source: "shop" });
       return json({ ok: true, name: who.name, action: "in", already: !r, at: r?.createdAt || new Date().toISOString() });
     }
     if (body.action === "out") {
@@ -84,6 +114,7 @@ async function kiosk(req, path) {
         }
         if (!lunch.ok) await addFlag({ userId: who.userId, name: who.name, kind: "lunch", reason: lunch.reason });
       }
+      await logPunch({ userId: who.userId, action: "out", lunch: !!body.lunch, lunchOk: lunch ? !!lunch.ok : null, source: isShop ? "shop" : "phone", clockOutAt: r.createdAt });
       return json({ ok: true, name: who.name, action: "out", at: r.createdAt, lunch });
     }
     return json({ error: "Unknown action." }, 400);
@@ -185,6 +216,31 @@ async function admin(req, path) {
       await saveConfig(cfg);
       return json({ ok: true });
 
+    case "admin/payroll": {
+      const week = /^\d{4}-\d{2}-\d{2}$/.test(body.week || "") ? body.week : undefined;
+      return json(await payrollWeek(week, { hidden: cfg.payrollHidden || [], pins: cfg.pins }));
+    }
+
+    case "admin/averages": {
+      const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "");
+      const weeks = Math.min(Math.max(Number(body.weeks) || 4, 1), 104);
+      const to = ok(body.to) ? body.to : addDays(defaultWeek(), 6);
+      const from = ok(body.from) ? body.from : addDays(to, -(weeks * 7) + 1);
+      if (from > to) return json({ error: "The start date is after the end date." }, 400);
+      if ((Date.parse(to) - Date.parse(from)) / 86400_000 > 731) return json({ error: "Pick a range of 2 years or less." }, 400);
+      return json(await averages(from, to, { hidden: cfg.payrollHidden || [] }));
+    }
+
+    case "admin/payroll-hide": {
+      const id = Number(body.userId);
+      if (!id) return json({ error: "Missing employee." }, 400);
+      const set = new Set(cfg.payrollHidden || []);
+      body.hidden ? set.add(id) : set.delete(id);
+      cfg.payrollHidden = [...set];
+      await saveConfig(cfg);
+      return json({ ok: true });
+    }
+
     case "admin/flags":
       return json({ flags: await getJSON("flags", []) });
 
@@ -214,11 +270,11 @@ async function oauth(req, path, url) {
   return json({ error: "Not found." }, 404);
 }
 
-export default async (req) => {
+export default async (req, context) => {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/api\//, "").replace(/\/$/, "");
   try {
-    if (path.startsWith("kiosk/")) return await kiosk(req, path);
+    if (path.startsWith("kiosk/")) return await kiosk(req, path, context);
     if (path.startsWith("admin/")) return await admin(req, path);
     if (path.startsWith("oauth/")) return await oauth(req, path, url);
     return json({ error: "Not found." }, 404);

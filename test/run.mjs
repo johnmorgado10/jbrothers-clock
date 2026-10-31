@@ -51,8 +51,8 @@ globalThis.fetch = async (url, opts = {}) => {
 
 const { default: handler } = await import("../netlify/functions/api.mjs");
 const O = "https://clock.test";
-const call = async (path, { body, headers = {}, method } = {}) => {
-  const res = await handler(new Request(O + "/api/" + path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json", ...headers }, body: body ? JSON.stringify(body) : undefined }));
+const call = async (path, { body, headers = {}, method, ip = "1.1.1.1" } = {}) => {
+  const res = await handler(new Request(O + "/api/" + path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json", ...headers }, body: body ? JSON.stringify(body) : undefined }), { ip });
   const text = await res.text();
   let data; try { data = JSON.parse(text); } catch { data = text; }
   return { status: res.status, data, location: res.headers.get("location") };
@@ -99,9 +99,13 @@ t("set custom pin", r.data.ok);
 r = await call("admin/set-pin", { body: { userId: 1, name: "Juan M", pin: "9090" }, headers: A });
 t("admin pin can't be employee pin", r.status === 400);
 
-// Kiosk without device
+// Phone (no shop device): can look up, can't clock in
+r = await call("kiosk/check", { body: {} });
+t("phone check works, not shop", r.status === 200 && r.data.shop === false, r);
 r = await call("kiosk/lookup", { body: { pin: "4826" } });
-t("unregistered device blocked", r.status === 403 && r.data.notSetUp);
+t("phone lookup works", r.status === 200 && r.data.canClockIn === false && r.data.clockedIn === false, r);
+r = await call("kiosk/clock", { body: { pin: "4826", action: "in" } });
+t("phone clock-in refused", r.status === 403 && r.data.shopOnly && clockedIn.size === 0, r);
 r = await call("admin/add-device", { body: { label: "Shop iPad" }, headers: A });
 const D = { "X-Device-Token": r.data.token };
 
@@ -159,6 +163,32 @@ r = await call("kiosk/clock", { body: { pin: "4826", action: "out", lunch: true 
 const flags = await call("admin/flags", { body: {}, headers: A });
 t("flag recorded", r.data.lunch && !r.data.lunch.ok && flags.data.flags.length === 1, { r: r.data, f: flags.data });
 
+// Phone clock-out works and is logged (lunch "No")
+await call("kiosk/clock", { body: { pin: "4826", action: "in" }, headers: D });
+r = await call("kiosk/lookup", { body: { pin: "4826" }, ip: "2.2.2.2" });
+t("phone sees clocked in + can clock out", r.data.clockedIn === true && r.data.canClockIn === false, r);
+r = await call("kiosk/clock", { body: { pin: "4826", action: "out", lunch: false }, ip: "2.2.2.2" });
+const plog = JSON.parse(mem.get("punches"));
+t("phone clock-out + punch log", r.data.ok && !r.data.already && plog.at(-1).source === "phone" && plog.at(-1).lunch === false, { r: r.data, last: plog.at(-1) });
+
+// Phone lockout is per connection and doesn't affect the shop or other phones
+for (let i = 0; i < 5; i++) await call("kiosk/lookup", { body: { pin: "0002" }, ip: "6.6.6.6" });
+r = await call("kiosk/lookup", { body: { pin: "4826" }, ip: "6.6.6.6" });
+t("phone locked after 5 wrong", r.status === 429, r);
+r = await call("kiosk/lookup", { body: { pin: "4826" }, ip: "7.7.7.7" });
+t("other phone still works", r.status === 200, r);
+r = await call("kiosk/lookup", { body: { pin: "4826" }, headers: D });
+t("shop unaffected by phone lockout", r.status === 200, r);
+
+// Many wrong guesses spread across phones trips the all-phones lock (not the shop)
+const lk = JSON.parse(mem.get("lockouts")); delete lk["phone:" ]; mem.set("lockouts", JSON.stringify(lk));
+for (let i = 0; i < 25; i++) await call("kiosk/lookup", { body: { pin: "0003" }, ip: "9.9." + i + ".1" });
+r = await call("kiosk/lookup", { body: { pin: "4826" }, ip: "8.8.8.8" });
+t("all-phones lock after mass guessing", r.status === 429, r);
+r = await call("kiosk/lookup", { body: { pin: "4826" }, headers: D });
+t("shop still works during all-phones lock", r.status === 200, r);
+const lk2 = JSON.parse(mem.get("lockouts")); delete lk2["phones:all"]; mem.set("lockouts", JSON.stringify(lk2));
+
 // Wrong PIN lockout
 for (let i = 0; i < 5; i++) await call("kiosk/lookup", { body: { pin: "0001" }, headers: D });
 r = await call("kiosk/lookup", { body: { pin: "4826" }, headers: D });
@@ -178,7 +208,7 @@ t("auto refresh", refreshCount === rc + 1 && r.status === 200, r);
 const devs = await call("admin/devices", { body: {}, headers: A });
 await call("admin/remove-device", { body: { id: devs.data.devices[0].id }, headers: A });
 r = await call("kiosk/check", { body: {}, headers: D });
-t("removed device blocked", r.status === 403);
+t("removed device becomes phone mode", r.status === 200 && r.data.shop === false, r);
 
 // Scheduled refresh
 const { default: keep } = await import("../netlify/functions/keep-connected.mjs");

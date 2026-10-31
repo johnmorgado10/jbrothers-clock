@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/img/icon-192.png">
+<title>Payroll · J-Brothers Landscaping</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css">
+<style>
+  body { font-size: 16px; line-height: 1.6; }
+  header {
+    position: sticky; top: 0; z-index: 5; background: rgba(255, 255, 255, .96); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 3px solid var(--jb-rule); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  header img { width: 76px; height: auto; display: block; }
+  header .logo-fallback { font-size: 22px; }
+  header nav { display: flex; gap: 18px; }
+  header nav a { color: var(--jb-green-700); font-weight: 700; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  header nav a:hover { color: var(--jb-brown); }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 72px; }
+  .intro { text-align: center; margin-bottom: 24px; }
+  .intro h1 { font-size: 46px; line-height: 1.1; color: var(--jb-brown); margin: 10px 0 0; }
+  .intro .dots3 { margin-top: 14px; }
+
+  .card { padding: 22px 24px; margin-bottom: 18px; }
+  .card > .label { display: block; margin-bottom: 8px; }
+  h2.serif { font-size: 30px; line-height: 1.1; color: var(--jb-brown); margin: 0 0 6px; }
+  .muted { color: var(--jb-gray-600); font-size: 14px; }
+  .hidden { display: none !important; }
+  .btn { font-size: 13px; padding: 12px 18px; min-height: 44px; }
+  .btn.sm { padding: 8px 12px; min-height: 36px; font-size: 12px; }
+  .ico-btn { width: 44px; height: 44px; padding: 0; font-size: 20px; }
+
+  .weekbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .weekbar .mid { text-align: center; flex: 1; }
+  .weekbar .range { font-size: 26px; line-height: 1.15; color: var(--jb-brown); }
+  .weekbar input[type=date] { margin-top: 8px; font-size: 14px; padding: 6px 10px; }
+
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat { background: #fff; border: var(--border-w) solid var(--jb-rule); border-radius: var(--radius-md); padding: 14px 16px; }
+  .stat .label { font-size: 11px; display: block; margin-bottom: 6px; }
+  .stat b { font-family: var(--font-display); font-weight: 400; font-size: 34px; line-height: 1; color: var(--jb-brown); }
+
+  .review { border-left: 5px solid var(--jb-warning); background: var(--jb-warning-bg); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 8px; font-size: 15px; }
+  .review b { color: var(--jb-brown); }
+
+  .worker-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; cursor: pointer; }
+  .worker-head h2 { margin: 0; }
+  .worker-head .sum { font-size: 14px; color: var(--jb-gray-600); white-space: nowrap; }
+  .worker-body { margin-top: 14px; }
+  .worker.collapsed .worker-body { display: none; }
+  .chev { transition: transform .2s var(--ease); display: inline-flex; color: var(--jb-gray-600); }
+  .worker.collapsed .chev { transform: rotate(-90deg); }
+
+  table.days { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  table.days th { text-align: left; font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--jb-gray-600); padding: 0 4px 8px; }
+  table.days td { padding: 9px 4px; border-top: var(--border-w) solid var(--jb-rule); }
+  table.days .r { text-align: right; }
+  table.days tr.off td { color: var(--jb-gray-400); }
+  table.days tr.flag td { background: var(--jb-warning-bg); }
+  .lunch-q { color: var(--jb-warning); font-weight: 700; }
+
+  .totals { margin-top: 10px; border-top: 3px solid var(--jb-rule); padding-top: 12px; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .totals div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .totals .k { color: var(--jb-gray-600); }
+  .totals .big { font-size: 20px; font-weight: 700; color: var(--jb-brown); padding-top: 6px; }
+  .words { font-family: var(--font-display); font-size: 22px; line-height: 1.25; color: var(--jb-brown); margin-top: 10px; padding: 12px 14px; background: var(--jb-brown-100); border-radius: var(--radius-sm); }
+  .worker-actions { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .warn-rate { color: var(--jb-danger); font-weight: 600; font-size: 14px; }
+
+  .avg-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+  .avg-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .avg-controls select, .avg-controls input { font-size: 14px; padding: 8px 10px; }
+  table.avg { width: 100%; border-collapse: collapse; margin-top: 14px; font-variant-numeric: tabular-nums; }
+  table.avg th { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--jb-gray-600); text-align: right; padding: 0 4px 8px; }
+  table.avg th:first-child { text-align: left; }
+  table.avg td { padding: 11px 4px; border-top: var(--border-w) solid var(--jb-rule); text-align: right; font-size: 17px; font-weight: 600; }
+  table.avg td:first-child { text-align: left; font-weight: 400; font-size: 15px; }
+  table.avg td small { display: block; font-size: 12px; color: var(--jb-gray-400); font-weight: 400; }
+  table.avg tr.crew td { border-top: 3px solid var(--jb-rule); background: var(--jb-green-100); }
+  table.avg tr.crew td:first-child { font-weight: 700; color: var(--jb-green-800); }
+
+  .note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius-md); margin-bottom: 16px; font-weight: 600; }
+  .note.err { background: var(--jb-danger-bg); color: var(--jb-danger); }
+  .note.ok { background: var(--jb-green-100); color: var(--jb-green-800); }
+  .loading { text-align: center; color: var(--jb-gray-600); padding: 30px 0; }
+  .print-only { display: none; }
+
+  @media print {
+    @page { margin: 14mm; }
+    body { background: #fff; }
+    header, .intro, .weekbar-card, .stats, #review-card, #avg-card, #hidden-card, .worker-actions, .chev, #note, .no-print { display: none !important; }
+    .wrap { padding: 0; max-width: none; }
+    .worker { break-after: page; border: none; padding: 0; }
+    .worker.collapsed .worker-body { display: block; }
+    .worker.hidden-print { display: none !important; }
+    .print-only { display: block; }
+    .print-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--jb-rule); padding-bottom: 10px; margin-bottom: 14px; }
+    .print-head img { width: 110px; }
+    table.days tr.flag td { background: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <img src="https://files.copilotcrm.com/8544/1792625031_d219866faeeb1.png" alt="J-Brothers Landscaping LLC"
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    <div class="logo-fallback">J-Brothers</div>
+  </div>
+  <nav>
+    <a href="/admin.html">Admin</a>
+    <a href="/">Clock <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <div class="intro">
+    <div class="tagline">Payroll</div>
+    <h1 class="serif">Weekly <em>pay</em></h1>
+    <div class="dots3"><i></i><i></i><i></i></div>
+  </div>
+
+  <div id="note"></div>
+
+  <div class="card hidden" id="signin-card">
+    <span class="label">Admin</span>
+    <h2 class="serif">Sign <em>in</em> first</h2>
+    <p class="muted">Payroll is behind your admin PIN. Sign in on the admin page, then tap Payroll.</p>
+    <a class="btn btn-primary" href="/admin.html">Go to admin</a>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="card weekbar-card">
+      <div class="weekbar">
+        <button class="btn btn-ghost ico-btn" id="prev" aria-label="Previous week"><svg class="ico" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="mid">
+          <div class="label">Pay week</div>
+          <div class="range serif" id="range">—</div>
+          <div class="muted" id="payday"></div>
+          <input class="input" type="date" id="jump" aria-label="Jump to a week">
+        </div>
+        <button class="btn btn-ghost ico-btn" id="next" aria-label="Next week"><svg class="ico" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><span class="label">Total hours</span><b id="t-hours">—</b></div>
+      <div class="stat"><span class="label">Total to pay</span><b id="t-pay">—</b></div>
+    </div>
+
+    <div class="card hidden" id="review-card">
+      <span class="label">Needs review</span>
+      <h2 class="serif" id="review-title">Check <em>these</em> first</h2>
+      <p class="muted">Fix the time in Homeworks, then tap Refresh.</p>
+      <div id="review"></div>
+    </div>
+
+    <div id="workers"><div class="loading">Loading…</div></div>
+
+    <div class="card hidden" id="hidden-card">
+      <span class="label">Hidden from payroll</span>
+      <div id="hidden-list"></div>
+    </div>
+
+    <div class="inline no-print" style="display:flex; gap:10px; margin-bottom:18px;">
+      <button class="btn btn-primary" id="print" style="flex:1">Print checks</button>
+      <button class="btn btn-outline" id="refresh" style="flex:1">Refresh</button>
+    </div>
+
+    <div class="card" id="avg-card">
+      <div class="avg-head">
+        <div>
+          <span class="label">Crew</span>
+          <h2 class="serif">Averages</h2>
+        </div>
+        <div class="avg-controls">
+          <select class="input" id="avg-range" aria-label="Averages range">
+            <option value="4">Last 4 weeks</option>
+            <option value="8">Last 8 weeks</option>
+            <option value="season">This season</option>
+            <option value="custom">Custom dates</option>
+          </select>
+        </div>
+      </div>
+      <div class="avg-controls hidden" id="avg-custom" style="margin-top:10px">
+        <input class="input" type="date" id="avg-from" aria-label="From"> <span class="muted">to</span>
+        <input class="input" type="date" id="avg-to" aria-label="To">
+        <button class="btn btn-outline sm" id="avg-go">Show</button>
+      </div>
+      <p class="muted" id="avg-sub" style="margin:8px 0 0"></p>
+      <div id="avg-table"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const session = () => { try { return sessionStorage.getItem("adminSession"); } catch { return null; } };
+const money = (n) => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dollars = (n) => "$" + Math.round(n).toLocaleString("en-US");
+const h4 = (n) => Number(n).toFixed(4);
+const h2 = (n) => Number(n).toFixed(2);
+const longDate = (d, opts) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", ...opts });
+const addDays = (d, n) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+
+function note(text, kind = "ok") { $("note").innerHTML = text ? `<div class="note ${kind}"><span>${esc(text)}</span></div>` : ""; }
+
+async function api(path, body = {}) {
+  const res = await fetch(`/api/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session() || ""}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({ error: "Connection problem." }));
+  if (data.signedOut) { showSignIn(); throw new Error(data.error); }
+  if (!res.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+function showSignIn() { $("app").classList.add("hidden"); $("signin-card").classList.remove("hidden"); }
+
+let week = null, data = null, lastWeekKey = null;
+
+async function loadWeek(w) {
+  $("workers").innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    data = await api("admin/payroll", w ? { week: w } : {});
+    week = data.week;
+    if (!lastWeekKey) lastWeekKey = data.week;
+    render();
+    note("");
+  } catch (e) { $("workers").innerHTML = ""; note(e.message, "err"); }
+}
+
+function render() {
+  $("range").textContent = `${longDate(data.week, { weekday: "short", month: "short", day: "numeric" })} – ${longDate(data.weekEnd, { weekday: "short", month: "short", day: "numeric" })}`;
+  $("payday").textContent = `Pay day: ${longDate(data.payDay, { weekday: "long", month: "short", day: "numeric" })}`;
+  $("jump").value = data.week;
+  $("t-hours").textContent = h2(data.totals.hours);
+  $("t-pay").textContent = dollars(data.totals.pay);
+
+  const shown = data.workers.filter((w) => !w.hidden);
+  const flags = shown.flatMap((w) => w.flags.map((f) => ({ ...f, name: w.name })));
+  $("review-card").classList.toggle("hidden", !flags.length);
+  $("review-title").innerHTML = flags.length === 1 ? "Check <em>this</em> first" : `Check <em>these ${flags.length}</em> first`;
+  $("review").innerHTML = flags.map((f) => `<div class="review"><b>${esc(f.name)}</b> · ${esc(f.weekday)} ${esc(longDate(f.date, { month: "short", day: "numeric" }))}: ${esc(f.text)}</div>`).join("");
+
+  $("workers").innerHTML = shown.length ? shown.map(workerCard).join("") : '<div class="card muted">No hours this week.</div>';
+
+  const hid = data.workers.filter((w) => w.hidden);
+  $("hidden-card").classList.toggle("hidden", !hid.length);
+  $("hidden-list").innerHTML = hid.map((w) => `<div class="inline" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1.5px solid var(--jb-rule)"><span>${esc(w.name)} <span class="muted">· ${h2(w.total)} h this week</span></span><button class="btn btn-outline sm unhide" data-id="${w.id}">Show</button></div>`).join("");
+}
+
+function workerCard(w) {
+  const ytd = data.ytd && data.ytd.workers[w.id];
+  const rows = w.days.map((d) => `
+    <tr class="${d.off ? "off" : ""} ${d.flags && d.flags.length ? "flag" : ""}">
+      <td>${esc(d.weekday)} <span class="muted">${esc(longDate(d.date, { month: "numeric", day: "numeric" }))}</span></td>
+      <td>${esc(d.in)}</td><td>${esc(d.out)}</td>
+      <td>${d.lunch === "?" ? '<span class="lunch-q">?</span>' : esc(d.lunch || (d.off ? "" : "—"))}</td>
+      <td class="r">${d.off ? "—" : h4(d.hours)}</td>
+    </tr>`).join("");
+  return `
+  <div class="card worker" data-id="${w.id}">
+    <div class="print-only print-head">
+      <img src="https://files.copilotcrm.com/8544/1792625031_d219866faeeb1.png" alt="J-Brothers Landscaping LLC">
+      <div style="text-align:right"><div class="label">Pay week</div><div class="serif" style="font-size:20px;color:var(--jb-brown)">${esc($("range").textContent)}</div></div>
+    </div>
+    <div class="worker-head">
+      <h2 class="serif"><span class="chev"><svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span> ${esc(w.name)}</h2>
+      <span class="sum">${h2(w.total)} h · ${dollars(w.rounded)}</span>
+    </div>
+    <div class="worker-body">
+      <table class="days">
+        <tr><th>Day</th><th>In</th><th>Out</th><th>Lunch</th><th class="r">Hours</th></tr>
+        ${rows}
+      </table>
+      <div class="totals">
+        <div><span class="k">Weekly total</span><span>${h4(w.total)} hrs</span></div>
+        <div><span class="k">${h4(w.total)} × ${money(w.rate)}/hr</span><span>${money(w.pay)}</span></div>
+        <div class="big"><span>Pay (rounded)</span><span>${dollars(w.rounded)}</span></div>
+        ${ytd ? `<div><span class="k">${data.ytd.year} year to date</span><span>${h2(ytd.hours)} hrs · ${dollars(ytd.pay)}</span></div>` : ""}
+      </div>
+      <div class="words">${esc(w.words)}</div>
+      <div class="worker-actions">
+        ${w.noRate ? '<span class="warn-rate">No hourly rate in Homeworks. Add it on their profile.</span>' : `<span class="muted">Rate from Homeworks: ${money(w.rate)}/hr</span>`}
+        <button class="btn btn-ghost sm hide" data-id="${w.id}">Hide from payroll</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+$("workers").onclick = async (e) => {
+  const hide = e.target.closest(".hide");
+  if (hide) { await api("admin/payroll-hide", { userId: Number(hide.dataset.id), hidden: true }); return loadWeek(week); }
+  const head = e.target.closest(".worker-head");
+  if (head) head.closest(".worker").classList.toggle("collapsed");
+};
+$("hidden-list").onclick = async (e) => {
+  const b = e.target.closest(".unhide");
+  if (b) { await api("admin/payroll-hide", { userId: Number(b.dataset.id), hidden: false }); loadWeek(week); }
+};
+$("prev").onclick = () => loadWeek(addDays(week, -7));
+$("next").onclick = () => loadWeek(addDays(week, 7));
+$("jump").onchange = () => $("jump").value && loadWeek($("jump").value);
+$("refresh").onclick = () => { loadWeek(week); loadAverages(); };
+$("print").onclick = () => window.print();
+
+// ---------- averages ----------
+async function loadAverages() {
+  const v = $("avg-range").value;
+  $("avg-custom").classList.toggle("hidden", v !== "custom");
+  let body = {};
+  if (v === "4" || v === "8") body = { weeks: Number(v) };
+  else if (v === "season") {
+    const end = addDays(lastWeekKey || new Date().toISOString().slice(0, 10), 6);
+    body = { from: `${end.slice(0, 4)}-03-01`, to: end };
+  } else {
+    if (!$("avg-from").value || !$("avg-to").value) { $("avg-sub").textContent = "Pick a start and end date, then tap Show."; $("avg-table").innerHTML = ""; return; }
+    body = { from: $("avg-from").value, to: $("avg-to").value };
+  }
+  $("avg-table").innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const a = await api("admin/averages", body);
+    $("avg-sub").textContent = `${longDate(a.from, { month: "short", day: "numeric" })} – ${longDate(a.to, { month: "short", day: "numeric", year: "numeric" })} · days worked only · lunch already out` +
+      (a.skipped ? ` · ${a.skipped} forgotten clock-out day${a.skipped === 1 ? "" : "s"} left out` : "");
+    if (!a.workers.length) { $("avg-table").innerHTML = '<p class="muted">No hours in this range.</p>'; return; }
+    $("avg-table").innerHTML = `<table class="avg">
+      <tr><th>Worker</th><th>Per day</th><th>Per week</th></tr>
+      ${a.workers.map((w) => `<tr><td>${esc(w.name)}<small>${w.days} day${w.days === 1 ? "" : "s"} worked</small></td><td>${h2(w.perDay)} h</td><td>${h2(w.perWeek)} h</td></tr>`).join("")}
+      ${a.crew ? `<tr class="crew"><td>Whole crew</td><td>${h2(a.crew.perDay)} h</td><td>${h2(a.crew.perWeek)} h</td></tr>` : ""}
+    </table>`;
+  } catch (e) { $("avg-table").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+}
+$("avg-range").onchange = loadAverages;
+$("avg-go").onclick = loadAverages;
+
+if (!session()) showSignIn();
+else { $("app").classList.remove("hidden"); loadWeek().then(loadAverages); }
+</script>
+</body>
+</html>

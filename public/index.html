@@ -60,6 +60,11 @@
   .pad .fn { font-size: 13px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--jb-gray-600); background: #fff; }
   .pad .fn .ico { font-size: 28px; }
 
+  .phone-note { display: none; margin: 10px 0 0; font-size: 13px; line-height: 1.45; color: var(--jb-gray-600); }
+  body.phone .phone-note { display: block; }
+  .shop-only { display: none; gap: 12px; align-items: flex-start; text-align: left; margin: 0 0 14px; padding: 14px 16px; border-radius: var(--radius-md); background: var(--jb-brown-100); border: var(--border-w) solid var(--jb-brown-300); color: var(--jb-brown); font-size: 15px; line-height: 1.45; }
+  .shop-only .ico { font-size: 24px; margin-top: 1px; }
+  .shop-only span { color: var(--jb-gray-600); font-size: 13px; }
   .msg { min-height: 22px; margin-top: 14px; color: var(--jb-danger); font-weight: 600; font-size: 15px; }
 
   .title { font-size: clamp(38px, 8vw, 56px); line-height: 1.05; color: var(--jb-brown); margin: 6px 0 0; }
@@ -89,6 +94,23 @@
   .row .big { margin: 0; }
 
   .admin-link { position: fixed; left: 22px; bottom: 12px; font-size: 11px; color: var(--jb-gray-400); text-decoration: none; }
+  /* Phones and short screens: smaller clock and keys, and allow scrolling so nothing gets cut off. */
+  @media (max-width: 520px), (max-height: 760px) {
+    html, body { height: auto; min-height: 100%; overflow: auto; }
+    header { padding: 12px 18px 10px; }
+    header img { width: 110px; }
+    main { align-items: flex-start; padding: 14px 22px 48px; }
+    .clock { font-size: 72px; }
+    .clock .ampm { font-size: 26px; }
+    .date { margin: 8px 0 16px; }
+    .pin-card { padding: 20px 16px 16px; }
+    .prompt { font-size: 26px; }
+    .pad { gap: 8px; }
+    .pad button { height: 62px; font-size: 26px; }
+    .title { font-size: 40px; }
+    .big { padding: 18px 10px; font-size: 20px; }
+    .admin-link { position: static; display: block; text-align: center; padding: 0 0 18px; }
+  }
 </style>
 </head>
 <body>
@@ -107,6 +129,7 @@
     <div class="card pin-card">
       <p class="prompt serif">Enter your PIN</p>
       <p class="prompt-es serif">Introduce tu PIN de 4 dígitos</p>
+      <p class="phone-note" id="phone-note">From a phone you can only clock out.<br>Desde el teléfono solo puedes fichar salida.</p>
       <div class="pin-dots" id="dots"><div></div><div></div><div></div><div></div></div>
       <div class="pad" id="pad">
         <button>1</button><button>2</button><button>3</button>
@@ -125,6 +148,10 @@
     <h1 class="title serif" id="hello">Hi</h1>
     <p class="sub serif" id="status"></p>
     <p class="sub-es" id="status-es"></p>
+    <div class="shop-only" id="shop-only">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <div><b>Clock in at the shop clock.</b> You can only clock out from this page.<br><span>Ficha entrada en el reloj del taller. Desde aquí solo puedes fichar salida.</span></div>
+    </div>
     <button class="btn btn-primary big" id="btn-in">
       <svg class="ico" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
       Clock In<small>Fichar entrada</small>
@@ -240,8 +267,9 @@ async function lookup() {
       $("status").innerHTML = `You're <em>clocked out</em> right now`;
       $("status-es").textContent = "No has fichado";
     }
-    $("btn-in").style.display = r.clockedIn ? "none" : "flex";
+    $("btn-in").style.display = !r.clockedIn && r.canClockIn ? "flex" : "none";
     $("btn-out").style.display = r.clockedIn ? "flex" : "none";
+    $("shop-only").style.display = !r.clockedIn && !r.canClockIn ? "flex" : "none";
     show("s-action");
   } catch (err) {
     $("pin-msg").textContent = err.message;
@@ -296,13 +324,17 @@ $("lunch-cancel").onclick = () => $("lunch").classList.remove("on");
 $("btn-cancel").onclick = reset;
 
 // Keep the screen awake on the shop tablet.
-async function stayAwake() { try { await navigator.wakeLock?.request("screen"); } catch {} }
+async function stayAwake() { if (document.body.classList.contains("phone")) return; try { await navigator.wakeLock?.request("screen"); } catch {} }
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && stayAwake());
 stayAwake();
 
 (async () => {
-  if (!device) return show("s-setup");
-  try { await api("kiosk/check"); } catch {}
+  // Shop tablet = full clock. Any other device (a phone) = clock out only.
+  try {
+    const r = await api("kiosk/check");
+    document.body.classList.toggle("phone", !r.shop);
+    if (!r.shop) { try { localStorage.removeItem("kioskDevice"); } catch {} device = null; }
+  } catch { document.body.classList.add("phone"); }
 })();
 </script>
 </body>

@@ -42,25 +42,32 @@ export async function verifyAdminSession(token) {
   return good.length === sig.length && crypto.timingSafeEqual(Buffer.from(good), Buffer.from(sig));
 }
 
-// Lockout after too many wrong PINs. key = "admin" or a device id.
-const MAX_TRIES = 5;
-const LOCK_MS = 60_000;
+// Lockout after too many wrong PINs. key = "admin", a device id, or a phone connection.
+const DEFAULT_LIMIT = { max: 5, lockMs: 60_000 };
 
 export async function lockedFor(key) {
   const l = (await getJSON("lockouts", {}))[key];
   return l && l.until > Date.now() ? Math.ceil((l.until - Date.now()) / 1000) : 0;
 }
 
-export async function recordFailure(key) {
+// windowMs: failures older than this are forgotten (so a slow trickle never locks).
+export async function recordFailure(key, { max, lockMs, windowMs } = DEFAULT_LIMIT) {
+  max = max || DEFAULT_LIMIT.max;
+  lockMs = lockMs || DEFAULT_LIMIT.lockMs;
+  windowMs = windowMs || 15 * 60_000;
   const all = await getJSON("lockouts", {});
   const prev = all[key];
-  // Start fresh if there's no record or an old lockout has expired.
-  const l = !prev || (prev.until && prev.until <= Date.now()) ? { count: 0, until: 0 } : prev;
+  const stale = !prev || (prev.until && prev.until <= Date.now()) || (prev.first && Date.now() - prev.first > windowMs);
+  const l = stale ? { count: 0, until: 0, first: Date.now() } : prev;
   l.count += 1;
-  if (l.count >= MAX_TRIES) {
-    l.until = Date.now() + LOCK_MS;
+  if (l.count >= max) {
+    l.until = Date.now() + lockMs;
     l.count = 0;
+    l.first = Date.now();
   }
+  all[key] = l;
+  // Drop old records so this list never grows forever.
+  for (const [k, v] of Object.entries(all)) if (v.until < Date.now() && Date.now() - (v.first || 0) > windowMs) delete all[k];
   all[key] = l;
   await setJSON("lockouts", all);
 }
