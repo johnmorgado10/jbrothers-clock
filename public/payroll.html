@@ -72,6 +72,24 @@
   .totals .big { font-size: 20px; font-weight: 700; color: var(--jb-brown); padding-top: 6px; }
   .words { font-family: var(--font-display); font-size: 22px; line-height: 1.25; color: var(--jb-brown); margin-top: 10px; padding: 12px 14px; background: var(--jb-brown-100); border-radius: var(--radius-sm); }
   .worker-actions { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .adj-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 0; }
+  .adj-row .reason { color: var(--jb-gray-600); flex: 1; min-width: 0; }
+  .adj-row .amt { white-space: nowrap; font-weight: 600; }
+  .adj-row .amt.neg { color: var(--jb-danger); }
+  .adj-row .amt.pos { color: var(--jb-green-700); }
+  .adj-tools { display: inline-flex; gap: 4px; }
+  .icon-btn { width: 32px; height: 32px; border-radius: var(--radius-sm); border: var(--border-w) solid var(--jb-rule); background: #fff; color: var(--jb-gray-600); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; }
+  .icon-btn:hover { background: var(--jb-brown-100); color: var(--jb-brown); }
+  .original { color: var(--jb-gray-600); }
+  .adj-form { margin-top: 10px; padding: 14px; border: var(--border-w) solid var(--jb-rule); border-radius: var(--radius-md); background: var(--jb-paper); }
+  .seg { display: inline-flex; border: var(--border-w) solid var(--jb-brown-300); border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 10px; }
+  .seg button { border: none; background: #fff; padding: 9px 16px; font-family: var(--font-body); font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--jb-gray-600); cursor: pointer; }
+  .seg button.on.minus { background: var(--jb-danger-bg); color: var(--jb-danger); }
+  .seg button.on.plus { background: var(--jb-green-100); color: var(--jb-green-800); }
+  .adj-fields { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; }
+  .adj-fields .input { width: 100%; font-size: 15px; }
+  .adj-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .adj-err { color: var(--jb-danger); font-size: 14px; font-weight: 600; margin-top: 8px; min-height: 0; }
   .warn-rate { color: var(--jb-danger); font-weight: 600; font-size: 14px; }
 
   .avg-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
@@ -95,7 +113,7 @@
   @media print {
     @page { margin: 14mm; }
     body { background: #fff; }
-    header, .intro, .weekbar-card, .stats, #review-card, #avg-card, #hidden-card, .worker-actions, .chev, #note, .no-print { display: none !important; }
+    header, .intro, .weekbar-card, .stats, #review-card, #avg-card, #hidden-card, .worker-actions, .chev, #note, .no-print, .adj-tools, .adj-form, .adj-add { display: none !important; }
     .wrap { padding: 0; max-width: none; }
     .worker { break-after: page; border: none; padding: 0; }
     .worker.collapsed .worker-body { display: block; }
@@ -207,6 +225,7 @@ const session = () => { try { return sessionStorage.getItem("adminSession"); } c
 const money = (n) => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dollars = (n) => "$" + Math.round(n).toLocaleString("en-US");
 const h4 = (n) => Number(n).toFixed(4);
+const checkMoney = (n) => (Number.isInteger(Math.round(n * 100) / 100) ? dollars(n) : money(n)).replace("$-", "−$");
 const h2 = (n) => Number(n).toFixed(2);
 const longDate = (d, opts) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", ...opts });
 const addDays = (d, n) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
@@ -244,7 +263,7 @@ function render() {
   $("payday").textContent = `Pay day: ${longDate(data.payDay, { weekday: "long", month: "short", day: "numeric" })}`;
   $("jump").value = data.week;
   $("t-hours").textContent = h2(data.totals.hours);
-  $("t-pay").textContent = dollars(data.totals.pay);
+  $("t-pay").textContent = checkMoney(data.totals.pay);
 
   const shown = data.workers.filter((w) => !w.hidden);
   const flags = shown.flatMap((w) => w.flags.map((f) => ({ ...f, name: w.name })));
@@ -276,7 +295,7 @@ function workerCard(w) {
     </div>
     <div class="worker-head">
       <h2 class="serif"><span class="chev"><svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span> ${esc(w.name)}</h2>
-      <span class="sum">${h2(w.total)} h · ${dollars(w.rounded)}</span>
+      <span class="sum">${h2(w.total)} h · ${checkMoney(w.check)}</span>
     </div>
     <div class="worker-body">
       <table class="days">
@@ -286,10 +305,24 @@ function workerCard(w) {
       <div class="totals">
         <div><span class="k">Weekly total</span><span>${h4(w.total)} hrs</span></div>
         <div><span class="k">${h4(w.total)} × ${money(w.rate)}/hr</span><span>${money(w.pay)}</span></div>
-        <div class="big"><span>Pay (rounded)</span><span>${dollars(w.rounded)}</span></div>
-        ${ytd ? `<div><span class="k">${data.ytd.year} year to date</span><span>${h2(ytd.hours)} hrs · ${dollars(ytd.pay)}</span></div>` : ""}
+        ${w.adjustments.length ? `
+          <div class="original"><span>Pay (rounded)</span><span>${dollars(w.rounded)}</span></div>
+          ${w.adjustments.map((a) => `
+            <div class="adj-row" data-adj="${esc(a.id)}">
+              <span class="reason">${esc(a.reason)}</span>
+              <span class="amt ${a.amount < 0 ? "neg" : "pos"}">${a.amount < 0 ? "−" : "+"}${money(Math.abs(a.amount))}</span>
+              <span class="adj-tools">
+                <button class="icon-btn adj-edit" data-id="${esc(a.id)}" aria-label="Edit adjustment"><svg class="ico" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg></button>
+                <button class="icon-btn adj-del" data-id="${esc(a.id)}" aria-label="Remove adjustment"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+              </span>
+            </div>`).join("")}
+          <div class="big"><span>Check amount</span><span>${checkMoney(w.check)}</span></div>` : `
+          <div class="big"><span>Pay (rounded)</span><span>${dollars(w.rounded)}</span></div>`}
+        ${ytd ? `<div><span class="k">${data.ytd.year} year to date</span><span>${h2(ytd.hours)} hrs · ${checkMoney(ytd.pay)}</span></div>` : ""}
       </div>
       <div class="words">${esc(w.words)}</div>
+      <button class="btn btn-outline sm adj-add" data-id="${w.id}" style="margin-top:12px">+ Add adjustment</button>
+      <div class="adj-slot"></div>
       <div class="worker-actions">
         ${w.noRate ? '<span class="warn-rate">No hourly rate in Homeworks. Add it on their profile.</span>' : `<span class="muted">Rate from Homeworks: ${money(w.rate)}/hr</span>`}
         <button class="btn btn-ghost sm hide" data-id="${w.id}">Hide from payroll</button>
@@ -298,7 +331,68 @@ function workerCard(w) {
   </div>`;
 }
 
+// ---------- adjustments ----------
+function adjForm(card, existing) {
+  const slot = card.querySelector(".adj-slot");
+  card.querySelector(".adj-add").classList.add("hidden");
+  const minus = existing ? existing.amount < 0 : true;
+  slot.innerHTML = `
+    <div class="adj-form" data-edit="${existing ? esc(existing.id) : ""}">
+      <div class="seg"><button class="minus ${minus ? "on" : ""}" data-sign="-1">− Deduct</button><button class="plus ${minus ? "" : "on"}" data-sign="1">+ Add</button></div>
+      <div class="adj-fields">
+        <input class="input adj-amt" inputmode="decimal" placeholder="$ amount" value="${existing ? Math.abs(existing.amount) : ""}" aria-label="Amount">
+        <input class="input adj-reason" maxlength="140" placeholder="Reason, e.g. Half of work boots" value="${existing ? esc(existing.reason) : ""}" aria-label="Reason">
+      </div>
+      <div class="adj-err"></div>
+      <div class="adj-actions">
+        <button class="btn btn-primary sm adj-save">Save</button>
+        <button class="btn btn-ghost sm adj-cancel">Cancel</button>
+      </div>
+    </div>`;
+  slot.querySelector(".adj-amt").focus();
+}
+function closeAdj(card) {
+  card.querySelector(".adj-slot").innerHTML = "";
+  card.querySelector(".adj-add").classList.remove("hidden");
+}
+async function saveAdj(card) {
+  const form = card.querySelector(".adj-form");
+  const sign = Number(form.querySelector(".seg .on").dataset.sign);
+  const raw = form.querySelector(".adj-amt").value.replace(/[$,\s]/g, "");
+  const amount = Number(raw);
+  const reason = form.querySelector(".adj-reason").value.trim();
+  const err = form.querySelector(".adj-err");
+  if (!raw || !Number.isFinite(amount) || amount <= 0) { err.textContent = "Enter an amount, like 100 or 25.50."; return; }
+  if (!reason) { err.textContent = "Add a reason so it's clear later."; return; }
+  try {
+    await api("admin/adjust", { week, userId: Number(card.dataset.id), op: form.dataset.edit ? "update" : "add", id: form.dataset.edit || undefined, amount: sign * amount, reason });
+    await loadWeek(week);
+    note("Adjustment saved.");
+  } catch (e2) { err.textContent = e2.message; }
+}
+
+$("workers").oninput = (e) => { const f = e.target.closest(".adj-form"); if (f) f.querySelector(".adj-err").textContent = ""; };
+$("workers").onkeydown = (e) => { if (e.key === "Enter" && e.target.closest(".adj-form")) saveAdj(e.target.closest(".worker")); };
+
 $("workers").onclick = async (e) => {
+  const card = e.target.closest(".worker");
+  const seg = e.target.closest(".seg button");
+  if (seg) { seg.parentElement.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === seg)); return; }
+  if (e.target.closest(".adj-add")) return adjForm(card);
+  if (e.target.closest(".adj-cancel")) return closeAdj(card);
+  if (e.target.closest(".adj-save")) return saveAdj(card);
+  const edit = e.target.closest(".adj-edit");
+  if (edit) {
+    const w = data.workers.find((x) => x.id === Number(card.dataset.id));
+    return adjForm(card, w.adjustments.find((a) => a.id === edit.dataset.id));
+  }
+  const del = e.target.closest(".adj-del");
+  if (del) {
+    if (!confirm("Remove this adjustment?")) return;
+    try { await api("admin/adjust", { week, userId: Number(card.dataset.id), op: "delete", id: del.dataset.id }); await loadWeek(week); note("Adjustment removed."); }
+    catch (e2) { note(e2.message, "err"); }
+    return;
+  }
   const hide = e.target.closest(".hide");
   if (hide) { await api("admin/payroll-hide", { userId: Number(hide.dataset.id), hidden: true }); return loadWeek(week); }
   const head = e.target.closest(".worker-head");

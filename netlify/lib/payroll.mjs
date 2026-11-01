@@ -66,7 +66,8 @@ function under1000(n) {
   return out.join(" ");
 }
 export function dollarsInWords(amount) {
-  const n = Math.round(amount);
+  const totalCents = Math.round(Math.abs(amount) * 100);
+  const n = Math.floor(totalCents / 100), cents = totalCents % 100;
   let text;
   if (n === 0) text = "zero";
   else {
@@ -77,7 +78,7 @@ export function dollarsInWords(amount) {
     if (rest) parts.push(under1000(rest));
     text = parts.join(" ");
   }
-  return `${text[0].toUpperCase()}${text.slice(1)} and 00/100 dollars`;
+  return `${text[0].toUpperCase()}${text.slice(1)} and ${String(cents).padStart(2, "0")}/100 dollars`;
 }
 
 // ---------- data ----------
@@ -173,7 +174,7 @@ export async function payrollWeek(weekInput, { hidden = [], pins = {}, nowMs = D
   const week = mondayOf(weekInput || defaultWeek(nowMs));
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const from = startOfDay(week), to = startOfDay(addDays(week, 7));
-  const [people, entries, punches] = await Promise.all([fetchPeople(), fetchEntries(from, to), getJSON("punches", [])]);
+  const [people, entries, punches, allAdjustments] = await Promise.all([fetchPeople(), fetchEntries(from, to), getJSON("punches", []), getJSON("adjustments", {})]);
   const trackingStart = await trackingStartDay(punches);
   const todayKey = dateKey(nowMs);
   const byDay = groupByDay(entries);
@@ -182,7 +183,8 @@ export async function payrollWeek(weekInput, { hidden = [], pins = {}, nowMs = D
   for (const p of people) {
     if (p.role === "OWNER") continue;
     const mine = byDay[p.id] || {};
-    if (!Object.keys(mine).length && (p.inactive || !pins[p.id])) continue;
+    const adjustments = allAdjustments[`${week}:${p.id}`] || [];
+    if (!Object.keys(mine).length && !adjustments.length && (p.inactive || !pins[p.id])) continue;
     const myPunches = punches.filter((x) => x.userId === p.id);
     const rows = days.map((d) =>
       mine[d] ? summarizeDay(d, mine[d], myPunches, trackingStart, todayKey) : { date: d, weekday: DAY_NAMES[weekday(d)], in: "—", out: "—", hours: 0, raw: 0, lunch: "", flags: [], off: true }
@@ -190,8 +192,13 @@ export async function payrollWeek(weekInput, { hidden = [], pins = {}, nowMs = D
     const total = r4(rows.reduce((s, r) => s + r.raw, 0));
     const pay = r2(total * p.rate);
     rows.forEach((r) => { delete r.raw; delete r.midnight; });
+    const rounded = Math.round(total * p.rate);
+    const adjTotal = r2(adjustments.reduce((sum, a) => sum + a.amount, 0));
+    const check = r2(rounded + adjTotal);
     workers.push({
-      id: p.id, name: p.name, rate: p.rate, days: rows, total, pay, rounded: Math.round(total * p.rate), words: dollarsInWords(total * p.rate),
+      id: p.id, name: p.name, rate: p.rate, days: rows, total, pay, rounded,
+      adjustments, adjTotal, check,
+      words: check >= 0 ? dollarsInWords(check) : "No check: the adjustments are more than the pay.",
       flags: rows.flatMap((r) => r.flags.map((f) => ({ date: r.date, weekday: r.weekday, text: f }))),
       hidden: hidden.includes(p.id), noRate: !p.rate,
     });
@@ -214,7 +221,15 @@ export async function payrollWeek(weekInput, { hidden = [], pins = {}, nowMs = D
         weeks[mondayOf(d)] = (weeks[mondayOf(d)] || 0) + s.raw;
       }
       const hours = r4(Object.values(weeks).reduce((a, b) => a + b, 0));
-      const pay = Object.values(weeks).reduce((a, h) => a + Math.round(r4(h) * w.rate), 0);
+      let pay = Object.values(weeks).reduce((a, h) => a + Math.round(r4(h) * w.rate), 0);
+      // Add this year's adjustments up to and including this week.
+      for (const [key, list] of Object.entries(allAdjustments)) {
+        const [wk, uid] = key.split(":");
+        if (Number(uid) === w.id && wk >= mondayOf(yStart) && wk <= week) {
+          for (const a of list) if (addDays(wk, 6) >= yStart) pay += a.amount;
+        }
+      }
+      pay = r2(pay);
       ytd.workers[w.id] = { hours, pay };
     }
   }
@@ -222,7 +237,7 @@ export async function payrollWeek(weekInput, { hidden = [], pins = {}, nowMs = D
   const shown = workers.filter((w) => !w.hidden);
   return {
     week, weekEnd, payDay: addDays(week, 10), days,
-    totals: { hours: r4(shown.reduce((s, w) => s + w.total, 0)), pay: shown.reduce((s, w) => s + w.rounded, 0) },
+    totals: { hours: r4(shown.reduce((s, w) => s + w.total, 0)), pay: r2(shown.reduce((s, w) => s + w.check, 0)) },
     workers, ytd,
   };
 }

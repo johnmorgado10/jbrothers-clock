@@ -75,6 +75,13 @@
   .big { width: 100%; padding: 22px 12px; font-size: 22px; letter-spacing: .16em; border-radius: var(--radius-md); flex-direction: column; gap: 4px; margin-bottom: 12px; }
   .big .ico { font-size: 30px; }
   .big small { font-size: 12px; letter-spacing: .3em; opacity: .85; font-weight: 600; }
+  .exit-link {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; padding: 16px 0 6px;
+    background: none; border: none; border-top: var(--border-w) solid var(--jb-rule); cursor: pointer;
+    font-family: var(--font-body); font-size: 13px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--jb-gray-600);
+  }
+  .exit-link .ico { font-size: 18px; }
+  .exit-link:active { color: var(--jb-brown); }
   .ghost-wide { width: 100%; padding: 16px; font-size: 14px; border-radius: var(--radius-md); }
 
   .done-mark { width: 104px; height: 104px; border-radius: 50%; background: var(--jb-green); color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; }
@@ -160,7 +167,7 @@
       <svg class="ico" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
       Clock Out<small>Fichar salida</small>
     </button>
-    <button class="btn btn-ghost ghost-wide" id="btn-cancel">Cancel · Cancelar</button>
+    <button class="exit-link" id="btn-cancel"><svg class="ico" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></svg> Exit · Salir</button>
     <div class="msg" id="action-msg"></div>
   </section>
 
@@ -219,7 +226,7 @@ function show(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === id));
   clearTimeout(idleTimer);
   if (id === "s-action") idleTimer = setTimeout(reset, 25000);
-  if (id === "s-done") idleTimer = setTimeout(reset, 6000);
+  if (id === "s-done") idleTimer = setTimeout(reset, 4000);
 }
 function reset() {
   pin = ""; current = null; busy = false;
@@ -322,6 +329,8 @@ $("lunch-yes").onclick = () => clock("out", true);
 $("lunch-no").onclick = () => clock("out", false);
 $("lunch-cancel").onclick = () => $("lunch").classList.remove("on");
 $("btn-cancel").onclick = reset;
+// Tap anywhere on the confirmation to clear it right away for the next person.
+document.querySelector("main").addEventListener("click", () => { if ($("s-done").classList.contains("on")) reset(); });
 
 // Keep the screen awake on the shop tablet.
 async function stayAwake() { if (document.body.classList.contains("phone")) return; try { await navigator.wakeLock?.request("screen"); } catch {} }

@@ -198,6 +198,24 @@ t("lockout after 5 wrong", r.status === 429, r);
 r = await call("admin/login", { body: { pin: "9090" } });
 t("admin login (separate lockout)", !!r.data.session, r);
 
+// Adjustments API
+r = await call("admin/adjust", { body: { week: "2026-10-21", userId: 2, op: "add", amount: -100, reason: "Half of work boots" }, headers: A });
+let adj = JSON.parse(mem.get("adjustments"));
+t("adjust: add (week snaps to Monday)", r.data.ok && adj["2026-10-19:2"]?.[0].amount === -100, adj);
+const aid = adj["2026-10-19:2"][0].id;
+r = await call("admin/adjust", { body: { week: "2026-10-19", userId: 2, op: "update", id: aid, amount: -80, reason: "Boots (split)" }, headers: A });
+adj = JSON.parse(mem.get("adjustments"));
+t("adjust: update", adj["2026-10-19:2"][0].amount === -80 && adj["2026-10-19:2"][0].reason === "Boots (split)", adj);
+r = await call("admin/adjust", { body: { week: "2026-10-19", userId: 2, op: "add", amount: 0, reason: "x" }, headers: A });
+t("adjust: zero refused", r.status === 400);
+r = await call("admin/adjust", { body: { week: "2026-10-19", userId: 2, op: "add", amount: 20, reason: "  " }, headers: A });
+t("adjust: reason required", r.status === 400);
+r = await call("admin/adjust", { body: { week: "2026-10-19", userId: 2, op: "add", amount: 20, reason: "x" }, headers: { Authorization: "Bearer bad.sig" } });
+t("adjust: needs admin", r.status === 401);
+r = await call("admin/adjust", { body: { week: "2026-10-19", userId: 2, op: "delete", id: aid }, headers: A });
+adj = JSON.parse(mem.get("adjustments"));
+t("adjust: delete (empty week removed)", r.data.ok && !adj["2026-10-19:2"], adj);
+
 // Token refresh when expired
 const tok = JSON.parse(mem.get("tokens")); tok.expiresAt = Date.now() - 1; mem.set("tokens", JSON.stringify(tok));
 const rc = refreshCount;

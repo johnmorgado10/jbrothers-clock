@@ -5,7 +5,7 @@ import {
   lockedFor, recordFailure, clearFailures,
 } from "../lib/security.mjs";
 import * as hw from "../lib/homeworks.mjs";
-import { payrollWeek, averages, defaultWeek, addDays } from "../lib/payroll.mjs";
+import { payrollWeek, averages, defaultWeek, addDays, mondayOf } from "../lib/payroll.mjs";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -229,6 +229,37 @@ async function admin(req, path) {
       if (from > to) return json({ error: "The start date is after the end date." }, 400);
       if ((Date.parse(to) - Date.parse(from)) / 86400_000 > 731) return json({ error: "Pick a range of 2 years or less." }, 400);
       return json(await averages(from, to, { hidden: cfg.payrollHidden || [] }));
+    }
+
+    case "admin/adjust": {
+      // Add, change or remove a pay adjustment (amount + reason) for one worker's week.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.week || "")) return json({ error: "Missing week." }, 400);
+      const week = mondayOf(body.week);
+      const userId = Number(body.userId);
+      if (!userId) return json({ error: "Missing employee." }, 400);
+      const key = `${week}:${userId}`;
+      const all = await getJSON("adjustments", {});
+      const list = all[key] || [];
+      if (body.op === "delete") {
+        all[key] = list.filter((a) => a.id !== body.id);
+      } else {
+        const amount = Math.round(Number(body.amount) * 100) / 100;
+        const reason = String(body.reason || "").trim().slice(0, 140);
+        if (!Number.isFinite(amount) || amount === 0) return json({ error: "Enter an amount other than zero." }, 400);
+        if (Math.abs(amount) > 10000) return json({ error: "That amount looks too big. Check it and try again." }, 400);
+        if (!reason) return json({ error: "Add a reason so it's clear later." }, 400);
+        if (body.op === "update") {
+          const a = list.find((x) => x.id === body.id);
+          if (!a) return json({ error: "That adjustment wasn't found. Refresh and try again." }, 404);
+          Object.assign(a, { amount, reason, updatedAt: new Date().toISOString() });
+        } else {
+          list.push({ id: randomToken(6), amount, reason, at: new Date().toISOString() });
+        }
+        all[key] = list;
+      }
+      if (!all[key].length) delete all[key];
+      await setJSON("adjustments", all);
+      return json({ ok: true });
     }
 
     case "admin/payroll-hide": {

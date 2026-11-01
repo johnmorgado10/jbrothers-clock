@@ -79,7 +79,8 @@ t("words 640", P.dollarsInWords(640) === "Six hundred forty and 00/100 dollars")
 t("words 1015", P.dollarsInWords(1015) === "One thousand fifteen and 00/100 dollars", P.dollarsInWords(1015));
 t("words 12", P.dollarsInWords(12) === "Twelve and 00/100 dollars");
 t("words 2300", P.dollarsInWords(2300) === "Two thousand three hundred and 00/100 dollars", P.dollarsInWords(2300));
-t("words rounds 577.5 → 578", P.dollarsInWords(577.5) === "Five hundred seventy-eight and 00/100 dollars", P.dollarsInWords(577.5));
+t("words with cents 577.50", P.dollarsInWords(577.5) === "Five hundred seventy-seven and 50/100 dollars", P.dollarsInWords(577.5));
+t("words with cents 0.75", P.dollarsInWords(0.75) === "Zero and 75/100 dollars", P.dollarsInWords(0.75));
 
 // Weekly payroll
 const now = Date.parse("2026-10-29T15:00:00Z");
@@ -104,6 +105,28 @@ t("Jose 8.5 × 15 = $128 (127.50 rounds up)", near(jose.total, 8.5) && jose.roun
 const rol = W.workers.find((w) => w.id === 3);
 t("Rolando 0 hours", rol.total === 0 && rol.rounded === 0);
 t("no YTD before 2027", W.ytd === null);
+
+// Adjustments: original pay stays, check amount + words use the adjusted total
+const before = { pay: W.totals.pay, pablo: pablo.rounded };
+mem.set("adjustments", JSON.stringify({
+  "2026-10-19:2": [{ id: "a1", amount: -100, reason: "Half of work boots" }, { id: "a2", amount: 25.5, reason: "Gas money" }],
+  "2026-10-19:6": [{ id: "a3", amount: 50, reason: "Leftover bonus" }],
+}));
+W = await P.payrollWeek("2026-10-19", { pins: { 2: {}, 3: {}, 4: {} }, nowMs: now });
+const pa = W.workers.find((w) => w.id === 2);
+t("original rounded pay unchanged", pa.rounded === before.pablo, pa);
+t("check = rounded − 100 + 25.50", near(pa.check, before.pablo - 74.5) && pa.adjustments.length === 2 && near(pa.adjTotal, -74.5), pa);
+t("check words use adjusted amount with cents", pa.words === P.dollarsInWords(before.pablo - 74.5) && pa.words.includes("50/100"), pa.words);
+const gone = W.workers.find((w) => w.id === 6);
+t("worker with only an adjustment still shows", gone && gone.total === 0 && gone.check === 50, gone);
+t("week total uses check amounts", near(W.totals.pay, before.pay - 74.5 + 50), { got: W.totals.pay, before: before.pay });
+t("adjustment on another week doesn't leak", (await P.payrollWeek("2026-10-26", { pins: { 2: {} }, nowMs: now })).workers.find((w) => w.id === 2).adjustments.length === 0);
+mem.set("adjustments", JSON.stringify({ "2026-10-19:4": [{ id: "a4", amount: -500, reason: "Advance" }] }));
+W = await P.payrollWeek("2026-10-19", { pins: { 2: {}, 3: {}, 4: {} }, nowMs: now });
+const jn = W.workers.find((w) => w.id === 4);
+t("adjustments bigger than pay: no check words", jn.check < 0 && jn.words.startsWith("No check"), jn);
+mem.set("adjustments", JSON.stringify({}));
+W = await P.payrollWeek("2026-10-19", { pins: { 2: {}, 3: {}, 4: {} }, nowMs: now });
 
 // Hidden workers drop out of totals
 const allPay = W.totals.pay;
@@ -131,6 +154,10 @@ entries.pop();
 W = await P.payrollWeek("2027-01-04", { pins: { 4: {} }, nowMs: Date.parse("2027-01-14T15:00:00Z") });
 const y = W.ytd && W.ytd.workers[4];
 t("YTD starts Jan 1 2027: 8 + 9 + 8.5 = 25.5 h, pay = $120 + $263 = $383", y && near(y.hours, 25.5) && y.pay === 120 + Math.round(17.5 * 15), y);
+mem.set("adjustments", JSON.stringify({ "2027-01-04:4": [{ id: "y1", amount: -40, reason: "Boots" }], "2026-12-21:4": [{ id: "y0", amount: -999, reason: "2026, not counted" }], "2027-01-11:4": [{ id: "y2", amount: -7, reason: "Future week, not counted" }] }));
+W = await P.payrollWeek("2027-01-04", { pins: { 4: {} }, nowMs: Date.parse("2027-01-14T15:00:00Z") });
+t("YTD includes this year's adjustments only (383 − 40)", near(W.ytd.workers[4].pay, 343), W.ytd.workers[4]);
+mem.set("adjustments", JSON.stringify({}));
 
 // Averages
 const A = await P.averages("2026-10-19", "2026-10-25", { nowMs: now });

@@ -12,6 +12,8 @@ clock-out times stay as punched.
 - `/payroll.html` is behind the admin PIN. It shows weekly pay (Monday–Sunday weeks, paid the next Thursday):
   daily in/out/lunch/hours, 4-decimal totals, the Homeworks profile rate, rounded pay, check words, review flags,
   print pages, crew averages, and year-to-date totals starting in 2027.
+  Each worker's week can have adjustments (amount + reason, e.g. "−$100 Half of work boots"). The original
+  rounded pay stays visible; the check amount and check words use the adjusted total. Adjustments are saved per week.
 
 ## First-time setup
 1. Open `/admin.html` and tap **Connect Homeworks**. Log in with the **owner** account and approve.
