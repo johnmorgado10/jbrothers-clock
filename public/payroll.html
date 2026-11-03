@@ -141,7 +141,7 @@
 <div class="wrap">
   <div class="intro">
     <div class="tagline">Payroll</div>
-    <h1 class="serif">Weekly <em>pay</em></h1>
+    <h1 class="serif">Weekly pay</h1>
     <div class="dots3"><i></i><i></i><i></i></div>
   </div>
 
@@ -149,7 +149,7 @@
 
   <div class="card hidden" id="signin-card">
     <span class="label">Admin</span>
-    <h2 class="serif">Sign <em>in</em> first</h2>
+    <h2 class="serif">Sign in first</h2>
     <p class="muted">Payroll is behind your admin PIN. Sign in on the admin page, then tap Payroll.</p>
     <a class="btn btn-primary" href="/admin.html">Go to admin</a>
   </div>
@@ -175,7 +175,7 @@
 
     <div class="card hidden" id="review-card">
       <span class="label">Needs review</span>
-      <h2 class="serif" id="review-title">Check <em>these</em> first</h2>
+      <h2 class="serif" id="review-title">Check these first</h2>
       <p class="muted">Fix the time in Homeworks, then tap Refresh.</p>
       <div id="review"></div>
     </div>
@@ -268,7 +268,7 @@ function render() {
   const shown = data.workers.filter((w) => !w.hidden);
   const flags = shown.flatMap((w) => w.flags.map((f) => ({ ...f, name: w.name })));
   $("review-card").classList.toggle("hidden", !flags.length);
-  $("review-title").innerHTML = flags.length === 1 ? "Check <em>this</em> first" : `Check <em>these ${flags.length}</em> first`;
+  $("review-title").innerHTML = flags.length === 1 ? "Check this first" : `Check these ${flags.length} first`;
   $("review").innerHTML = flags.map((f) => `<div class="review"><b>${esc(f.name)}</b> · ${esc(f.weekday)} ${esc(longDate(f.date, { month: "short", day: "numeric" }))}: ${esc(f.text)}</div>`).join("");
 
   $("workers").innerHTML = shown.length ? shown.map(workerCard).join("") : '<div class="card muted">No hours this week.</div>';

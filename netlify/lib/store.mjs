@@ -2,11 +2,12 @@
 // Everything the kiosk remembers (Homeworks login, PINs, tablets, flags) lives here.
 import { getStore } from "@netlify/blobs";
 
-let store;
+// Get a fresh store handle on every call. Netlify gives each request its own short-lived
+// access pass; reusing a handle from an earlier request fails once that pass expires
+// ("failed to decode token: token expired").
 function s() {
   if (globalThis.__TEST_STORE__) return globalThis.__TEST_STORE__;
-  if (!store) store = getStore({ name: "kiosk", consistency: "strong" });
-  return store;
+  return getStore({ name: "kiosk", consistency: "strong" });
 }
 
 export async function getJSON(key, fallback = null) {

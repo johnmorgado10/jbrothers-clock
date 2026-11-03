@@ -183,7 +183,7 @@
   <!-- Device not set up -->
   <section class="screen" id="s-setup">
     <div class="label">Shop Clock</div>
-    <h1 class="title serif">Not <em>set up</em> yet</h1>
+    <h1 class="title serif">Not set up yet</h1>
     <div class="dots3"><i></i><i></i><i></i></div>
     <p class="setup-text">This device isn't set up as the shop clock.<br>An admin can set it up from the admin screen.</p>
   </section>
@@ -268,10 +268,10 @@ async function lookup() {
     current = r;
     $("hello").textContent = `Hi, ${r.name.split(" ")[0]}`;
     if (r.clockedIn) {
-      $("status").innerHTML = `You're <em>clocked in</em> since ${fmtTime(r.since)}`;
+      $("status").innerHTML = `You're clocked in since ${fmtTime(r.since)}`;
       $("status-es").textContent = `Fichaste entrada a las ${fmtTime(r.since)}`;
     } else {
-      $("status").innerHTML = `You're <em>clocked out</em> right now`;
+      $("status").innerHTML = `You're clocked out right now`;
       $("status-es").textContent = "No has fichado";
     }
     $("btn-in").style.display = !r.clockedIn && r.canClockIn ? "flex" : "none";
