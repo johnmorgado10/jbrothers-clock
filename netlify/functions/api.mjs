@@ -377,6 +377,12 @@ async function crewApi(req, path, context) {
       return json(await crew.stopWork({ eventId, userIds: who, end: body.end, by }));
     }
 
+    case "crew/copy": {
+      const who = ids(body.userIds), entryIds = ids(body.entryIds);
+      if (!eventId || !who.length || !entryIds.length) return json({ error: "Pick whose time to copy and who gets it." }, 400);
+      return json(await crew.copyTime({ eventId, entryIds, userIds: who, by }));
+    }
+
     case "crew/fix":
       return json(await crew.fixStart({ eventId, userId: Number(body.userId), start: body.start }));
 

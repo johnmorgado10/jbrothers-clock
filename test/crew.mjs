@@ -13,10 +13,10 @@ const T0 = Date.now();
 
 let entries = [], nextId = 1000, puts = [], calls = [];
 const users = [
-  { id: 16358, firstName: "Juan", lastName: "Morgado", role: "OWNER", inactiveDate: null },
-  { id: 22206, firstName: "John", lastName: "Morgado-Martinez", role: "EMPLOYEE", inactiveDate: null },
-  { id: 22210, firstName: "Pablo", lastName: "Quilimaco", role: "EMPLOYEE", inactiveDate: null },
-  { id: 32102, firstName: "Jose A", lastName: "Viñas Lopez", role: "EMPLOYEE", inactiveDate: null },
+  { id: 16358, firstName: "Juan", lastName: "Morgado", role: "OWNER", inactiveDate: null, rate: "0" },
+  { id: 22206, firstName: "John", lastName: "Morgado-Martinez", role: "EMPLOYEE", inactiveDate: null, rate: "16.5" },
+  { id: 22210, firstName: "Pablo", lastName: "Quilimaco", role: "EMPLOYEE", inactiveDate: null, rate: "16.5" },
+  { id: 32102, firstName: "Jose A", lastName: "Viñas Lopez", role: "EMPLOYEE", inactiveDate: null, rate: "15" },
 ];
 const event = {
   id: 500, title: "Paver patio", status: "OPEN", startDate: "2026-11-24", budgetedHours: "29", description: "<p>Continue paver installation.</p>",
@@ -46,6 +46,7 @@ globalThis.fetch = async (url, opts = {}) => {
   const q = query.replace(/\s+/g, " ");
   calls.push(q.slice(0, 60));
   const d = (data) => reply({ data });
+  if (q.includes("users(where: { id: { in:")) return d({ users: users.filter((u) => v.ids.includes(u.id)) });
   if (q.includes("users(where")) return d({ users });
   if (q.includes("clockOutUser")) {
     const open = entries.filter((e) => e.userId === v.u && !e.endedAt);
@@ -136,6 +137,7 @@ const pabloGlobal = entries.find((e) => e.userId === 22210 && e.type === "GLOBAL
 t("start pauses Pablo's shop timer", !!pabloGlobal.endedAt, pabloGlobal);
 let running = await crewLib.getRunning();
 t("running kept with phone's start time", running[22210].start === startAt && running[32102].start === startAt && running[22210].rate === "16.5", running);
+t("rate from Homeworks profile when not clocked in", running[32102].rate === "15" && running[32102].wasClockedIn === false, running[32102]);
 r = await call("kiosk/lookup", { body: { pin: "5173" } });
 t("shop clock sees Pablo as clocked in while on the job", r.data.clockedIn === true, r.data);
 r = await call("crew/visit", { body: { eventId: 500 }, headers: juan });
@@ -180,6 +182,34 @@ t("labor plan: hourly lines only, split by BH", plan.length === 2 && plan[0].lin
 r = await call("crew/labor", { body: { eventId: 500, apply: true, plan: [{ lineItemId: 1, to: 10.5 }, { lineItemId: 2, to: 2.5 }, { lineItemId: 3, to: 999 }, { lineItemId: 4, to: 7 }] }, headers: juan });
 t("labor update uses phone's numbers, only for labor lines", r.status === 200 && event.lineItems[0].quantity === "10.5" && event.lineItems[1].quantity === "2.5" && event.lineItems[2].quantity === "175" && event.lineItems[3].quantity === "1", event.lineItems);
 
+// ---- hand edits in Homeworks show up; lunch cuts don't lower billing ----
+r = await call("crew/visit", { body: { eventId: 500 }, headers: juan });
+const before = r.data.visit.tracked;
+const pj = entries.find((e) => e.userId === 22210 && e.eventId === 500);
+pj.endedAt = iso(Date.parse(pj.endedAt) - 60 * MIN); // office trims Pablo by an hour in Homeworks
+r = await call("crew/visit", { body: { eventId: 500 }, headers: juan });
+t("hand edit in Homeworks shows in crew clock", near(before - r.data.visit.tracked, 1, 0.02), { before, after: r.data.visit.tracked });
+
+// ---- someone not clocked in: job only, not put on the shop clock afterwards ----
+await call("admin/set-pin", { body: { userId: 22206, name: "John Morgado-Martinez", pin: "7351" }, headers: admin });
+r = await call("crew/start", { body: { eventId: 500, userIds: [22206], at: iso(Date.now() - 50 * MIN) }, headers: juan });
+r = await call("crew/stop", { body: { eventId: 500, userIds: [22206], end: iso(Date.now() - 10 * MIN) }, headers: juan });
+t("not clocked in before job: stays off the shop clock, no shop time added", r.status === 200 && !entries.some((e) => e.userId === 22206 && (e.type === "GLOBAL_TIMER")), entries.filter((e) => e.userId === 22206));
+
+// ---- copy time ----
+const juanEntry = { id: nextId++, userId: 16358, type: "EVENT_TIMER", eventId: 500, startedAt: iso(T0 - 9 * HOUR), endedAt: iso(T0 - 8 * HOUR), notes: null, hourlyRate: "0" };
+entries.push(juanEntry);
+r = await call("crew/visit", { body: { eventId: 500 }, headers: juan });
+t("visit lists finished entries", r.data.visit.entries.some((e) => e.id === juanEntry.id), r.data.visit.entries);
+const trackedBeforeCopy = r.data.visit.tracked;
+r = await call("crew/copy", { body: { eventId: 500, entryIds: [juanEntry.id], userIds: [22210, 32102] }, headers: juan });
+const copies = entries.filter((e) => e.eventId === 500 && e.startedAt === juanEntry.startedAt && e.userId !== 16358);
+t("copy makes same-time entries with profile rates", r.data.made === 2 && copies.length === 2 && copies.find((c) => c.userId === 32102).hourlyRate === "15" && /copied by Juan/.test(copies[0].notes), { r: r.data, copies });
+r = await call("crew/copy", { body: { eventId: 500, entryIds: [juanEntry.id], userIds: [22210] }, headers: juan });
+t("copying again is skipped (no double time)", r.data.made === 0 && r.data.skipped[0] === 22210, r.data);
+r = await call("crew/visit", { body: { eventId: 500 }, headers: juan });
+t("copied time counts toward tracked", near(r.data.visit.tracked - trackedBeforeCopy, 2, 0.02), { a: trackedBeforeCopy, b: r.data.visit.tracked });
+
 // ---- notes, photos ----
 r = await call("crew/note", { body: { eventId: 500, text: "Gate code 4412" }, headers: juan });
 t("dispatch note tagged with lead", event.dispatchNotes[0].message === "Gate code 4412 — Juan", event.dispatchNotes);
@@ -194,7 +224,6 @@ t("photo removed", r.status === 200 && event.beforeAndAfters[0].afterMedia.lengt
 
 // ---- complete stops anyone still on the job ----
 globalStart(22206, Date.now() - HOUR);
-await call("admin/set-pin", { body: { userId: 22206, name: "John Morgado-Martinez", pin: "7351" }, headers: admin });
 r = await call("crew/start", { body: { eventId: 500, userIds: [22206] }, headers: juan });
 r = await call("crew/complete", { body: { eventId: 500 }, headers: juan });
 running = await crewLib.getRunning();

@@ -50,6 +50,12 @@ async function runningGlobal(userIds) {
   return out;
 }
 
+async function profileRates(userIds) {
+  if (!userIds.length) return {};
+  const d = await gql(`query($ids: [SafeInt!]) { users(where: { id: { in: $ids } }) { id rate } }`, { ids: userIds });
+  return Object.fromEntries(d.users.filter((u) => u.rate != null).map((u) => [u.id, String(u.rate)]));
+}
+
 async function eventBasics(eventId) {
   const d = await gql(`query($id: SafeInt!) { event(eventId: $id) { id title customerId propertyId status } }`, { id: eventId });
   if (!d.event) throw new Error("That visit wasn't found in Homeworks.");
@@ -74,13 +80,14 @@ export async function startWork({ eventId, userIds, at, by }) {
   }
   const fresh = userIds.filter((u) => !(running[u] && running[u].eventId === eventId));
   const globals = await runningGlobal(fresh);
+  const rates = await profileRates(fresh.filter((u) => !globals[u] && !carry[u]));
   const results = await Promise.all(
     fresh.map(async (uid) => {
       const g = globals[uid], c = carry[uid];
       if (g) await gql(`mutation($u: SafeInt!) { clockOutUser(userId: $u) { id } }`, { u: uid });
       return [uid, {
         eventId, title: ev.title, customerId: ev.customerId, propertyId: ev.propertyId,
-        start, by, rate: g?.hourlyRate ?? c?.rate ?? null, category: g?.categoryId || c?.category || GLOBAL_CATEGORY,
+        start, by, rate: g?.hourlyRate ?? c?.rate ?? rates[uid] ?? null, category: g?.categoryId || c?.category || GLOBAL_CATEGORY,
         wasClockedIn: !!(g || c?.wasClockedIn),
       }];
     })
@@ -132,7 +139,9 @@ export async function stopWork({ eventId, userIds, end, by }) {
   const ids = userIds.filter((u) => running[u]?.eventId === eventId);
   const stopAt = cleanTime(end);
   // Everyone in parallel so a big crew still saves quickly.
-  const settled = await Promise.allSettled(ids.map((uid) => finishOne(uid, running[uid], Math.max(stopAt, running[uid].start + 60_000), { by, resume: true })));
+  // Back on shop / drive time only if they were on the shop clock when the job started.
+  // (Someone put on a job after hours, or entered after the fact, stays off the clock.)
+  const settled = await Promise.allSettled(ids.map((uid) => finishOne(uid, running[uid], Math.max(stopAt, running[uid].start + 60_000), { by, resume: !!running[uid].wasClockedIn })));
   const done = settled.filter((x) => x.status === "fulfilled").map((x) => x.value);
   await addSegments(eventId, done);
   const failedIds = ids.filter((_, i) => settled[i].status === "rejected");
@@ -172,18 +181,22 @@ export async function stopForClockOut(userId, at) {
 
 // Full job time on a visit, everyone added up (hours). Entries the crew clock wrote count
 // at the length it recorded (ignoring later lunch cuts); other entries count as they are.
+// Homeworks is the source of truth, so hand edits there count. The one exception: when
+// the shop clock cut 30 min of lunch out of a job entry the crew clock wrote, the entry
+// counts at its full length (customers are billed as if no lunch was taken).
+const LUNCH_NOTE = /lunch deducted \(shop clock\)/;
 export function trackedHours(timeEntries, segs, running, eventId, now = Date.now()) {
   const mine = new Map(segs.map((s) => [s.id, s]));
   let ms = 0;
   for (const e of timeEntries) {
     if (!e.endedAt) continue;
     const s = Date.parse(e.startedAt), en = Date.parse(e.endedAt);
-    if (mine.has(e.id)) continue;
-    const insideOurs = segs.some((g) => g.userId === e.userId && s >= g.start - 1000 && en <= g.end + 1000);
-    if (insideOurs) continue; // the second half of a lunch split of an entry we wrote
+    const seg = mine.get(e.id);
+    if (seg && LUNCH_NOTE.test(e.notes || "")) { ms += seg.end - seg.start; continue; }
+    if (!seg && LUNCH_NOTE.test(e.notes || "") && /^After|\| After/.test(e.notes || "") &&
+        segs.some((g) => g.userId === e.userId && s >= g.start - 1000 && en <= g.end + 1000)) continue; // other half of that cut
     ms += en - s;
   }
-  for (const s of segs) ms += s.end - s.start;
   for (const rec of Object.values(running)) if (rec.eventId === eventId) ms += Math.max(0, now - rec.start);
   return hours(ms);
 }
@@ -218,7 +231,7 @@ export async function schedule(userId, date) {
     `query($u: SafeInt!, $d: Date!) { events(where: { isDeleted: false, startDate: { equals: $d }, users: { id: { equals: $u } } }, take: 200) {
        id title status type startDate sortOrder budgetedHours recurringEventId
        customer { fullName } property { address { street1 city state zip } }
-       users { id firstName lastName } timeEntries { id userId startedAt endedAt } } }`,
+       users { id firstName lastName } timeEntries { id userId startedAt endedAt notes } } }`,
     { u: userId, d: date }
   );
   const running = await getRunning();
@@ -247,7 +260,7 @@ export async function visit(eventId) {
        dispatchNotes { message author date }
        beforeAndAfters { id beforeMedia { ${MEDIA} } afterMedia { ${MEDIA} } }
        media { ${MEDIA} }
-       timeEntries { id userId startedAt endedAt } }
+       timeEntries { id userId startedAt endedAt notes } }
      upsells { id name textActive } }`,
     { id: eventId }
   );
@@ -280,6 +293,7 @@ export async function visit(eventId) {
     done: r2(trackedHours(e.timeEntries, segs, {}, eventId)),
     running: Object.fromEntries(Object.entries(running).filter(([, r]) => r.eventId === eventId).map(([u, r]) => [u, r.start])),
     labor: laborPlan(e.lineItems, tracked),
+    entries: e.timeEntries.filter((t) => t.endedAt).map((t) => ({ id: t.id, userId: t.userId, start: Date.parse(t.startedAt), end: Date.parse(t.endedAt) })).sort((a, b) => a.start - b.start),
     upsells: (d.upsells || []).filter((u) => u.textActive).map((u) => ({ id: u.id, name: u.name })),
   };
 }
@@ -356,4 +370,32 @@ export async function removePhoto({ kind, mediaId, ba, eventId, propertyId }) {
     await gql(`mutation($b: SafeInt!, $m: SafeInt!) { ${m}(beforeAndAfterId: $b, mediaId: $m) { id } }`, { b: ba, m: mediaId });
   }
   return { ok: true };
+}
+
+// Copy someone's finished job time on this visit to other people (same start and end).
+// Their shop timers aren't touched; payroll counts overlapping time once.
+export async function copyTime({ eventId, entryIds, userIds, by }) {
+  const d = await gql(`query($id: SafeInt!) { event(eventId: $id) { id customerId propertyId timeEntries { id userId startedAt endedAt } } }`, { id: eventId });
+  const ev = d.event;
+  if (!ev) throw new Error("That visit wasn't found in Homeworks.");
+  const pick = ev.timeEntries.filter((t) => entryIds.includes(t.id) && t.endedAt);
+  if (!pick.length) throw new Error("That time isn't on this visit anymore. Refresh and try again.");
+  const rates = await profileRates(userIds);
+  const made = [], skipped = [];
+  for (const uid of userIds) {
+    for (const src of pick) {
+      if (src.userId === uid) continue;
+      const s = Date.parse(src.startedAt), e = Date.parse(src.endedAt);
+      const clash = ev.timeEntries.some((t) => t.userId === uid && t.endedAt && Date.parse(t.startedAt) < e && Date.parse(t.endedAt) > s);
+      if (clash) { skipped.push(uid); continue; }
+      const input = { eventId, userId: uid, startedAt: src.startedAt, endedAt: src.endedAt, notes: `Crew clock · copied${by ? ` by ${by}` : ""}` };
+      if (ev.customerId) input.customerId = ev.customerId;
+      if (ev.propertyId) input.propertyId = ev.propertyId;
+      if (rates[uid] != null) input.hourlyRate = rates[uid];
+      const added = await gql(`mutation($i: TimeEntryInput!) { addTimeEntry(input: $i) { id } }`, { i: input });
+      made.push({ id: added.addTimeEntry.id, userId: uid, start: s, end: e, by: by || null });
+    }
+  }
+  await addSegments(eventId, made);
+  return { ok: true, made: made.length, skipped: [...new Set(skipped)] };
 }

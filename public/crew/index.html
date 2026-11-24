@@ -397,8 +397,18 @@ function applyLocal(v, item) {
   v.running = v.running || {};
   switch (item.type) {
     case "start": for (const u of b.userIds) v.running[u] = at; break;
-    case "stop": for (const u of b.userIds) if (v.running[u] != null) { v.done += (Date.parse(b.end) - v.running[u]) / 3600000; delete v.running[u]; } break;
+    case "stop": for (const u of b.userIds) if (v.running[u] != null) { const st = v.running[u], en = Math.max(Date.parse(b.end), st + 60000); v.done += (en - st) / 3600000; (v.entries ||= []).push({ id: "local" + item.qid + u, userId: +u, start: st, end: en, local: true }); delete v.running[u]; } break;
     case "fix": if (v.running[b.userId] != null) v.running[b.userId] = Date.parse(b.start); break;
+    case "copy": {
+      const src = (v.entries || []).filter((e) => b.entryIds.includes(e.id));
+      for (const u of b.userIds) for (const e of src) {
+        if (e.userId === u || (v.entries || []).some((x) => x.userId === u && x.start < e.end && x.end > e.start)) continue;
+        v.entries.push({ id: "local" + item.qid + u + e.id, userId: u, start: e.start, end: e.end, local: true });
+        v.done += (e.end - e.start) / 3600000;
+      }
+      v.entries.sort((a, c) => a.start - c.start);
+      break;
+    }
     case "note": v.notes.unshift({ text: b.text + " — " + (me?.name || "").split(" ")[0], by: "You", at: new Date(item.made).toISOString() }); break;
     case "visit-note": v.visitNote = b.text; break;
     case "prop-note": v.propNotes = b.text; break;
@@ -431,7 +441,7 @@ async function loadVisit(id, { quiet } = {}) {
 }
 
 // ---------- schedule ----------
-let view = { name: "schedule" }, tab = "visit";
+let view = { name: "schedule" }, tab = "visit", showAllDays = false;
 let day = ymd(new Date());
 const sched = {}; // date -> list
 
@@ -500,7 +510,8 @@ function renderSchedule() {
         const v = cachedVisit(s.id);
         const status = statusOf(v?.status || s.status);
         const runIds = v ? Object.keys(v.running || {}) : s.onJob.map(String);
-        const hrs = v ? liveHours(v) : s.tracked;
+        const mine = v && (Object.keys(v.running || {}).length || queue.some((q) => q.eventId === s.id));
+        const hrs = mine ? liveHours(v) : s.tracked;
         const chips = status === "done" ? `<span class="chip done">Completed</span>` : status === "skipped" ? `<span class="chip skip">Skipped</span>` :
           runIds.length ? `<span class="chip live">${runIds.map(firstOf).join(", ")} on the job</span>` : `<span class="chip">${s.crew.map(esc).join(", ")}</span>`;
         const tag = status !== "open" ? `<div class="vtag done">${I.done}Visit</div>` : `<div class="vtag ${s.mow ? "mow" : ""}">${s.mow ? I.mow : I.home}${s.mow ? "Mow" : "Visit"}</div>`;
@@ -529,7 +540,7 @@ function jobOf(uid) {
 }
 
 function openVisit(id) {
-  view = { name: "visit", id }; tab = "visit";
+  view = { name: "visit", id }; tab = "visit"; showAllDays = false;
   const c = store.get("crewVisit:" + id);
   if (c && !visits[id]) visits[id] = c;
   render();
@@ -558,7 +569,18 @@ function renderVisit() {
       : `<div class="empty">${I.info} No one is on this job. Tap Start work.</div>`}
     </div>`;
 
-  const visitTab = `
+  const days = {};
+  for (const e of v.entries || []) (days[ymd(new Date(e.start))] ||= []).push(e);
+  const dayKeys = Object.keys(days).sort().reverse();
+  const timeCard = `
+    <div class="card"><h3>Time on this visit ${(v.entries || []).some((e) => !e.local) ? `<button class="link" id="copyt" type="button">${I.plus} Copy time</button>` : ""}</h3>
+      ${dayKeys.length ? dayKeys.slice(0, showAllDays ? 99 : 2).map((d) => `
+        <div class="label" style="margin:8px 0 2px">${new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
+        ${days[d].map((e) => `<div class="crew-row"><div class="avatar">${esc(initials(nameOf(e.userId)))}</div><div class="n"><b>${esc(nameOf(e.userId))}</b><small>${t12(e.start)} – ${t12(e.end)}${e.local ? " · not sent yet" : ""}</small></div><div class="tm" style="color:var(--gray)">${hm((e.end - e.start) / 3600000)}</div></div>`).join("")}`).join("")
+        + (dayKeys.length > 2 && !showAllDays ? `<button class="linkbtn" id="alldays" type="button">Show all ${dayKeys.length} days</button>` : "")
+      : `<div class="empty">${I.info} No finished time yet</div>`}
+    </div>`;
+  const visitTab = timeCard + `
     <div class="card"><h3>Visit note <button class="link" id="editvn" type="button">Edit</button></h3>${v.visitNote ? `<div style="white-space:pre-line">${esc(v.visitNote)}</div>` : `<div class="empty">${I.info} No visit note</div>`}</div>
     <div class="card"><h3>Line items</h3>${v.items.length ? v.items.map((it, i) => {
       const generic = /^general materials$/i.test(it.n) && it.d;
@@ -604,6 +626,8 @@ function renderVisit() {
   $("main").querySelectorAll("[data-fix]").forEach((b) => (b.onclick = () => fixSheet(v, +b.dataset.fix)));
   const on = (id, fn) => { if ($(id)) $(id).onclick = fn; };
   on("addp", () => pickSheet(v, true));
+  on("copyt", () => copySheet(v));
+  on("alldays", () => { showAllDays = true; renderVisit(); });
   on("addnote", () => noteSheet(v));
   on("editprop", () => textSheet(v, "prop"));
   on("editvn", () => textSheet(v, "visit"));
@@ -706,6 +730,32 @@ function stopSheet(v, preselect) {
         <div class="summary">${rows.map(([n, ms]) => `<div><span>${esc(n)}</span><b>${hms(ms)}</b></div>`).join("")}</div>
         <button class="btn btn-primary" style="width:100%;margin-top:12px" type="button" id="cx">Done</button>`);
       $("cx").onclick = closeSheet;
+    };
+  };
+  draw();
+}
+
+function copySheet(v) {
+  const list = (v.entries || []).filter((e) => !e.local).slice().reverse();
+  const from = new Set(), to = new Set();
+  const people = crewList.length ? crewList : [];
+  const draw = () => {
+    const sources = new Set(list.filter((e) => from.has(e.id)).map((e) => e.userId));
+    const targets = people.filter((c) => !(sources.size === 1 && sources.has(c.id)));
+    openSheet(`<h2>Copy time</h2><p>Give other people the same start and end time on this visit. Their shop clock isn't changed.</p>
+      <div class="label sec">Copy this time</div>
+      ${list.slice(0, 12).map((e) => `<button class="pick ${from.has(e.id) ? "on" : ""}" type="button" data-f="${e.id}"><span class="box">${I.check}</span><span class="n"><b>${esc(nameOf(e.userId))}</b><small>${new Date(e.start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${t12(e.start)} – ${t12(e.end)} · ${hm((e.end - e.start) / 3600000)}</small></span></button>`).join("")}
+      <div class="label sec">To</div>
+      ${targets.map((c) => `<button class="pick ${to.has(c.id) ? "on" : ""}" type="button" data-t="${c.id}"><span class="box">${I.check}</span><span class="avatar">${esc(initials(c.name))}</span><span class="n"><b>${esc(c.name)}</b></span></button>`).join("")}
+      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="go">Copy${to.size ? " to " + to.size : ""}</button></div>`);
+    $("sheet").querySelectorAll("[data-f]").forEach((b) => (b.onclick = () => { const id = +b.dataset.f; from.has(id) ? from.delete(id) : from.add(id); draw(); }));
+    $("sheet").querySelectorAll("[data-t]").forEach((b) => (b.onclick = () => { const id = +b.dataset.t; to.has(id) ? to.delete(id) : to.add(id); draw(); }));
+    $("cx").onclick = closeSheet;
+    $("go").onclick = () => {
+      if (!from.size) { toast("Pick whose time to copy"); return; }
+      if (!to.size) { toast("Pick who gets the time"); return; }
+      closeSheet();
+      act("copy", v.id, { entryIds: [...from], userIds: [...to] }, `Time copied to ${[...to].map(firstOf).join(", ")}`);
     };
   };
   draw();
