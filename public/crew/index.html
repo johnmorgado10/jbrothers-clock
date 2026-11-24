@@ -220,6 +220,29 @@
   .linkbtn { background: none; border: 0; color: var(--green-700); font-weight: 700; font-size: 13px; padding: 4px 0; }
   .th .x { cursor: pointer; }
   .chip.skip { background: var(--danger-bg); color: var(--danger); }
+  /* Room for the "Powered by Netlify" badge in the bottom-right corner, so it never covers a button. */
+  .bar { padding-bottom: 72px; }
+  .sheet { padding-bottom: 80px; }
+  .toast { bottom: 170px; }
+  .tt-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1.5px solid var(--rule); }
+  .tt-row:first-of-type { border-top: 0; }
+  .tt-row .n { flex: 1; min-width: 0; }
+  .tt-row .n b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tt-row .n small { color: var(--gray); font-size: 12px; }
+  .tt-row .tot { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 58px; text-align: right; }
+  .tt-row .box { cursor: pointer; }
+  .tt-row.sel .box { background: var(--green); border-color: var(--green); }
+  .tt-row.src { background: var(--green-100); border-radius: var(--r-sm); padding-left: 6px; padding-right: 6px; }
+  .daychips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .daychips button { border: 1.5px solid var(--rule); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--gray); }
+  .daychips button.on { background: var(--brown); border-color: var(--brown); color: #fff; }
+  .clip { background: var(--green-100); color: var(--green-800); border-radius: var(--r-sm); padding: 10px 12px; font-size: 13px; font-weight: 600; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+  .clip span { flex: 1; }
+  .ent { border: 1.5px solid var(--rule); border-radius: var(--r-md); padding: 10px; margin-bottom: 8px; }
+  .ent .r { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 14px; color: var(--gray); font-weight: 600; }
+  .ent input[type=time] { font-family: inherit; font-size: 17px; padding: 8px 10px; border: 1.5px solid var(--brown-300); border-radius: var(--r-sm); width: 100%; background: #fff; }
+  .ent .f { display: flex; justify-content: space-between; align-items: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .addent { width: 100%; border: 2px dashed var(--brown-300); background: #fff; border-radius: var(--r-md); padding: 12px; font-weight: 700; color: var(--brown); }
 </style>
 </head>
 <body>
@@ -399,6 +422,14 @@ function applyLocal(v, item) {
     case "start": for (const u of b.userIds) v.running[u] = at; break;
     case "stop": for (const u of b.userIds) if (v.running[u] != null) { const st = v.running[u], en = Math.max(Date.parse(b.end), st + 60000); v.done += (en - st) / 3600000; (v.entries ||= []).push({ id: "local" + item.qid + u, userId: +u, start: st, end: en, local: true }); delete v.running[u]; } break;
     case "fix": if (v.running[b.userId] != null) v.running[b.userId] = Date.parse(b.start); break;
+    case "entries": {
+      const dur = (e) => (e.end - e.start) / 3600000;
+      for (const up of b.update) { const e = (v.entries || []).find((x) => x.id === up.id); if (e) { v.done -= dur(e); e.start = Date.parse(up.start); e.end = Date.parse(up.end); v.done += dur(e); } }
+      for (const id of b.del) { const e = (v.entries || []).find((x) => x.id === id); if (e) { v.done -= dur(e); v.entries = v.entries.filter((x) => x !== e); } }
+      for (const [i, a] of b.add.entries()) { const e = { id: "local" + item.qid + "-" + i, userId: b.userId, start: Date.parse(a.start), end: Date.parse(a.end), local: true }; (v.entries ||= []).push(e); v.done += dur(e); }
+      v.entries.sort((x, y) => x.start - y.start);
+      break;
+    }
     case "copy": {
       const src = (v.entries || []).filter((e) => b.entryIds.includes(e.id));
       for (const u of b.userIds) for (const e of src) {
@@ -441,7 +472,7 @@ async function loadVisit(id, { quiet } = {}) {
 }
 
 // ---------- schedule ----------
-let view = { name: "schedule" }, tab = "visit", showAllDays = false;
+let view = { name: "schedule" }, tab = "visit";
 let day = ymd(new Date());
 const sched = {}; // date -> list
 
@@ -540,7 +571,7 @@ function jobOf(uid) {
 }
 
 function openVisit(id) {
-  view = { name: "visit", id }; tab = "visit"; showAllDays = false;
+  view = { name: "visit", id }; tab = "visit"; ttDay = null; ttSel.clear();
   const c = store.get("crewVisit:" + id);
   if (c && !visits[id]) visits[id] = c;
   render();
@@ -569,17 +600,7 @@ function renderVisit() {
       : `<div class="empty">${I.info} No one is on this job. Tap Start work.</div>`}
     </div>`;
 
-  const days = {};
-  for (const e of v.entries || []) (days[ymd(new Date(e.start))] ||= []).push(e);
-  const dayKeys = Object.keys(days).sort().reverse();
-  const timeCard = `
-    <div class="card"><h3>Time on this visit ${(v.entries || []).some((e) => !e.local) ? `<button class="link" id="copyt" type="button">${I.plus} Copy time</button>` : ""}</h3>
-      ${dayKeys.length ? dayKeys.slice(0, showAllDays ? 99 : 2).map((d) => `
-        <div class="label" style="margin:8px 0 2px">${new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
-        ${days[d].map((e) => `<div class="crew-row"><div class="avatar">${esc(initials(nameOf(e.userId)))}</div><div class="n"><b>${esc(nameOf(e.userId))}</b><small>${t12(e.start)} – ${t12(e.end)}${e.local ? " · not sent yet" : ""}</small></div><div class="tm" style="color:var(--gray)">${hm((e.end - e.start) / 3600000)}</div></div>`).join("")}`).join("")
-        + (dayKeys.length > 2 && !showAllDays ? `<button class="linkbtn" id="alldays" type="button">Show all ${dayKeys.length} days</button>` : "")
-      : `<div class="empty">${I.info} No finished time yet</div>`}
-    </div>`;
+  const timeCard = timeTrackingCard(v);
   const visitTab = timeCard + `
     <div class="card"><h3>Visit note <button class="link" id="editvn" type="button">Edit</button></h3>${v.visitNote ? `<div style="white-space:pre-line">${esc(v.visitNote)}</div>` : `<div class="empty">${I.info} No visit note</div>`}</div>
     <div class="card"><h3>Line items</h3>${v.items.length ? v.items.map((it, i) => {
@@ -626,8 +647,7 @@ function renderVisit() {
   $("main").querySelectorAll("[data-fix]").forEach((b) => (b.onclick = () => fixSheet(v, +b.dataset.fix)));
   const on = (id, fn) => { if ($(id)) $(id).onclick = fn; };
   on("addp", () => pickSheet(v, true));
-  on("copyt", () => copySheet(v));
-  on("alldays", () => { showAllDays = true; renderVisit(); });
+  wireTimeTracking(v);
   on("addnote", () => noteSheet(v));
   on("editprop", () => textSheet(v, "prop"));
   on("editvn", () => textSheet(v, "visit"));
@@ -660,6 +680,9 @@ function renderBar(v) {
     </div>
     <div class="prog"><div id="progfill" class="${over ? "over" : ""} ${n ? "live" : ""}" style="width:${pct}%"></div></div>
     <div class="meta"><span id="tracked">${hm(hrs)} tracked</span><span id="bhtxt" class="${over ? "overtxt" : ""}">${!v.bh ? "No budgeted hours" : over ? `Over BH by ${hm(hrs - v.bh)}` : `BH: ${hm(v.bh)}`}</span></div>`;
+  const jump = () => { tab = "visit"; renderVisit(); const c = $("ttcard"); if (c) c.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  if ($("bigclock")) { $("bigclock").style.cursor = "pointer"; $("bigclock").onclick = jump; }
+  if ($("tracked")) { $("tracked").style.cursor = "pointer"; $("tracked").onclick = jump; }
   if ($("start")) $("start").onclick = () => pickSheet(v, false);
   if ($("stopall")) $("stopall").onclick = () => stopSheet(v, Object.keys(m).map(Number));
 }
@@ -735,27 +758,100 @@ function stopSheet(v, preselect) {
   draw();
 }
 
-function copySheet(v) {
-  const list = (v.entries || []).filter((e) => !e.local).slice().reverse();
-  const from = new Set(), to = new Set();
-  const people = crewList.length ? crewList : [];
+// ---------- time tracking (like Homeworks): totals per person, edit, copy & paste ----------
+let ttDay = null, clip = null, ttSel = new Set();
+const dayLabel = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+function timeTrackingCard(v) {
+  const days = [...new Set((v.entries || []).map((e) => ymd(new Date(e.start))))].sort();
+  const today = ymd(new Date());
+  if (Object.keys(v.running || {}).length && !days.includes(today)) days.push(today);
+  if (!ttDay || !days.includes(ttDay)) ttDay = days.includes(today) ? today : days[days.length - 1] || today;
+  const onDay = (v.entries || []).filter((e) => ymd(new Date(e.start)) === ttDay);
+  const people = [...new Set([...onDay.map((e) => e.userId), ...(ttDay === today ? Object.keys(v.running || {}).map(Number) : []), ...crewList.map((c) => c.id).filter((id) => v.assigned.includes(id))])];
+  const total = (u) => onDay.filter((e) => e.userId === u).reduce((s, e) => s + (e.end - e.start), 0) + (ttDay === today && v.running?.[u] != null ? now() - v.running[u] : 0);
+  const clipNote = clip && clip.eventId === v.id && clip.day === ttDay
+    ? `<div class="clip"><span>Copied ${esc(firstOf(clip.userId))}'s time · ${clip.entries.map((e) => `${t12(e.start)}–${t12(e.end)}`).join(", ")}. Tap Paste, or check people and paste to all.</span><button class="mini" type="button" id="clipx">Cancel</button></div>` : "";
+  const pasting = !!clipNote;
+  return `
+    <div class="card" id="ttcard"><h3>Time tracking</h3>
+      ${days.length > 1 ? `<div class="daychips">${days.slice(-6).map((d) => `<button type="button" data-ttday="${d}" class="${d === ttDay ? "on" : ""}">${d === today ? "Today" : dayLabel(d)}</button>`).join("")}</div>` : `<div class="label" style="margin-bottom:4px">${ttDay === today ? "Today" : dayLabel(ttDay)}</div>`}
+      ${clipNote}
+      ${people.length ? people.map((u) => {
+        const has = onDay.some((e) => e.userId === u && !e.local);
+        const run = ttDay === today && v.running?.[u] != null;
+        const isSrc = pasting && clip.userId === u;
+        const btn = pasting ? (isSrc ? `<span class="mini" style="border:0">Copied</span>` : `<button class="mini" type="button" data-paste="${u}">Paste</button>`)
+          : has ? `<button class="mini" type="button" data-copy="${u}">Copy</button>` : "";
+        return `<div class="tt-row ${ttSel.has(u) ? "sel" : ""} ${isSrc ? "src" : ""}" data-row="${u}">
+          ${pasting && !isSrc ? `<span class="box" data-selu="${u}">${I.check}</span>` : ""}
+          <div class="n"><b>${esc(nameOf(u))}</b><small>${run ? "On the job now" : has ? onDay.filter((e) => e.userId === u).map((e) => `${t12(e.start)}–${t12(e.end)}`).join(", ") : "No time"}</small></div>
+          <div class="tot">${hm(total(u) / 3600000)}</div>${btn}
+          ${!pasting && (has || !run) ? `<button class="mini" type="button" data-edit="${u}" aria-label="Edit ${esc(nameOf(u))}'s time">✎</button>` : ""}</div>`;
+      }).join("") : `<div class="empty">${I.info} No time yet</div>`}
+      ${pasting && ttSel.size ? `<button class="btn btn-primary" style="width:100%;margin-top:8px" type="button" id="pastesel">Paste to ${ttSel.size} selected</button>` : ""}
+    </div>`;
+}
+
+function wireTimeTracking(v) {
+  const q = (sel, fn) => $("main").querySelectorAll(sel).forEach((b) => (b.onclick = () => fn(b)));
+  q("[data-ttday]", (b) => { ttDay = b.dataset.ttday; ttSel.clear(); renderVisit(); });
+  q("[data-copy]", (b) => {
+    const u = +b.dataset.copy;
+    const ents = (v.entries || []).filter((e) => e.userId === u && !e.local && ymd(new Date(e.start)) === ttDay);
+    clip = { eventId: v.id, day: ttDay, userId: u, entries: ents.map((e) => ({ id: e.id, start: e.start, end: e.end })) };
+    ttSel.clear(); renderVisit();
+  });
+  q("[data-selu]", (b) => { const u = +b.dataset.selu; ttSel.has(u) ? ttSel.delete(u) : ttSel.add(u); renderVisit(); });
+  q("[data-paste]", (b) => pasteTo(v, [+b.dataset.paste]));
+  q("[data-edit]", (b) => editSheet(v, +b.dataset.edit));
+  if ($("clipx")) $("clipx").onclick = () => { clip = null; ttSel.clear(); renderVisit(); };
+  if ($("pastesel")) $("pastesel").onclick = () => pasteTo(v, [...ttSel]);
+}
+
+function pasteTo(v, users) {
+  if (!clip || !users.length) return;
+  const c = clip;
+  ttSel.clear();
+  act("copy", v.id, { entryIds: c.entries.map((e) => e.id), userIds: users }, `Pasted ${firstOf(c.userId)}'s time to ${users.map(firstOf).join(", ")}`);
+}
+
+// Edit one person's entries on the chosen day: change times, delete, or add.
+function editSheet(v, u) {
+  const day = ttDay;
+  const orig = (v.entries || []).filter((e) => e.userId === u && ymd(new Date(e.start)) === day);
+  if (orig.some((e) => e.local)) { toast("Wait until the last change is sent, then edit"); return; }
+  const hhmm = (ms) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const at = (t) => new Date(`${day}T${t}`).getTime();
+  let rows = orig.map((e) => ({ id: e.id, s: hhmm(e.start), e: hhmm(e.end) }));
   const draw = () => {
-    const sources = new Set(list.filter((e) => from.has(e.id)).map((e) => e.userId));
-    const targets = people.filter((c) => !(sources.size === 1 && sources.has(c.id)));
-    openSheet(`<h2>Copy time</h2><p>Give other people the same start and end time on this visit. Their shop clock isn't changed.</p>
-      <div class="label sec">Copy this time</div>
-      ${list.slice(0, 12).map((e) => `<button class="pick ${from.has(e.id) ? "on" : ""}" type="button" data-f="${e.id}"><span class="box">${I.check}</span><span class="n"><b>${esc(nameOf(e.userId))}</b><small>${new Date(e.start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${t12(e.start)} – ${t12(e.end)} · ${hm((e.end - e.start) / 3600000)}</small></span></button>`).join("")}
-      <div class="label sec">To</div>
-      ${targets.map((c) => `<button class="pick ${to.has(c.id) ? "on" : ""}" type="button" data-t="${c.id}"><span class="box">${I.check}</span><span class="avatar">${esc(initials(c.name))}</span><span class="n"><b>${esc(c.name)}</b></span></button>`).join("")}
-      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="go">Copy${to.size ? " to " + to.size : ""}</button></div>`);
-    $("sheet").querySelectorAll("[data-f]").forEach((b) => (b.onclick = () => { const id = +b.dataset.f; from.has(id) ? from.delete(id) : from.add(id); draw(); }));
-    $("sheet").querySelectorAll("[data-t]").forEach((b) => (b.onclick = () => { const id = +b.dataset.t; to.has(id) ? to.delete(id) : to.add(id); draw(); }));
+    openSheet(`<h2>${esc(nameOf(u))}</h2><p>${dayLabel(day)} · times on this visit</p>
+      ${rows.map((r, i) => {
+        const ms = at(r.e) - at(r.s);
+        return `<div class="ent"><div class="r">Start<input type="time" data-i="${i}" data-k="s" value="${r.s}"></div>
+          <div class="r">End<input type="time" data-i="${i}" data-k="e" value="${r.e}"></div>
+          <div class="f"><span>Total ${ms > 0 ? hms(ms) : "—"}</span><button class="mini" type="button" data-del="${i}" aria-label="Delete entry">🗑 Delete</button></div></div>`;
+      }).join("")}
+      <button class="addent" type="button" id="addent">${I.plus} Add entry</button>
+      <div class="err" id="eerr"></div>
+      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="sv">${I.check} Save</button></div>`);
+    $("sheet").querySelectorAll("input[type=time]").forEach((inp) => (inp.onchange = () => { rows[+inp.dataset.i][inp.dataset.k] = inp.value; draw(); }));
+    $("sheet").querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => { rows.splice(+b.dataset.del, 1); draw(); }));
+    $("addent").onclick = () => { const last = rows[rows.length - 1]; rows.push(last ? { s: last.e, e: last.e } : { s: "08:00", e: "09:00" }); draw(); };
     $("cx").onclick = closeSheet;
-    $("go").onclick = () => {
-      if (!from.size) { toast("Pick whose time to copy"); return; }
-      if (!to.size) { toast("Pick who gets the time"); return; }
+    $("sv").onclick = () => {
+      for (const r of rows) if (!r.s || !r.e || at(r.e) <= at(r.s)) { $("eerr").textContent = "Each end time has to be after its start time."; return; }
+      if (rows.some((r) => at(r.e) > now() + 60000)) { $("eerr").textContent = "Times can't be in the future."; return; }
+      const update = [], add = [];
+      for (const r of rows) {
+        const o = orig.find((x) => x.id === r.id);
+        if (!o) add.push({ start: new Date(at(r.s)).toISOString(), end: new Date(at(r.e)).toISOString() });
+        else if (hhmm(o.start) !== r.s || hhmm(o.end) !== r.e) update.push({ id: r.id, start: new Date(at(r.s)).toISOString(), end: new Date(at(r.e)).toISOString() });
+      }
+      const del = orig.filter((o) => !rows.some((r) => r.id === o.id)).map((o) => o.id);
       closeSheet();
-      act("copy", v.id, { entryIds: [...from], userIds: [...to] }, `Time copied to ${[...to].map(firstOf).join(", ")}`);
+      if (!update.length && !add.length && !del.length) return;
+      act("entries", v.id, { userId: u, update, add, del }, `${firstOf(u)}'s time saved`);
     };
   };
   draw();

@@ -210,6 +210,19 @@ t("copying again is skipped (no double time)", r.data.made === 0 && r.data.skipp
 r = await call("crew/visit", { body: { eventId: 500 }, headers: juan });
 t("copied time counts toward tracked", near(r.data.visit.tracked - trackedBeforeCopy, 2, 0.02), { a: trackedBeforeCopy, b: r.data.visit.tracked });
 
+// ---- edit someone's entries ----
+const pc = entries.find((e) => e.userId === 22210 && e.eventId === 500 && e.startedAt === juanEntry.startedAt);
+const newEnd = iso(Date.parse(pc.endedAt) + 15 * MIN);
+r = await call("crew/entries", { body: { eventId: 500, userId: 22210, update: [{ id: pc.id, start: pc.startedAt, end: newEnd }], add: [{ start: iso(T0 - 7 * HOUR), end: iso(T0 - 6.5 * HOUR) }], del: [] }, headers: juan });
+const addedP = entries.find((e) => e.userId === 22210 && e.startedAt === iso(T0 - 7 * HOUR));
+t("edit + add entry", r.status === 200 && pc.endedAt === newEnd && addedP && addedP.hourlyRate === "16.5", { r: r.data, pc, addedP });
+r = await call("crew/entries", { body: { eventId: 500, userId: 22210, update: [], add: [], del: [addedP.id] }, headers: juan });
+t("delete entry", r.status === 200 && !entries.some((e) => e.id === addedP.id), r.data);
+r = await call("crew/entries", { body: { eventId: 500, userId: 22210, update: [{ id: juanEntry.id, start: juanEntry.startedAt, end: juanEntry.endedAt }], add: [], del: [] }, headers: juan });
+t("can't edit someone else's entry through another person", r.status === 400 && /isn't on this visit/.test(r.data.error), r);
+r = await call("crew/entries", { body: { eventId: 500, userId: 22210, update: [], add: [{ start: iso(T0 + 3 * HOUR), end: iso(T0 + 4 * HOUR) }], del: [] }, headers: juan });
+t("future times refused", r.status === 400 && /future/.test(r.data.error), r);
+
 // ---- notes, photos ----
 r = await call("crew/note", { body: { eventId: 500, text: "Gate code 4412" }, headers: juan });
 t("dispatch note tagged with lead", event.dispatchNotes[0].message === "Gate code 4412 — Juan", event.dispatchNotes);

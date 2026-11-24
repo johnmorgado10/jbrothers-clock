@@ -383,6 +383,13 @@ async function crewApi(req, path, context) {
       return json(await crew.copyTime({ eventId, entryIds, userIds: who, by }));
     }
 
+    case "crew/entries": {
+      const userId = Number(body.userId);
+      if (!eventId || !userId) return json({ error: "Missing visit or person." }, 400);
+      const arr = (x) => (Array.isArray(x) ? x.slice(0, 20) : []);
+      return json(await crew.editEntries({ eventId, userId, update: arr(body.update), add: arr(body.add), del: arr(body.del), by }));
+    }
+
     case "crew/fix":
       return json(await crew.fixStart({ eventId, userId: Number(body.userId), start: body.start }));
 
@@ -480,6 +487,7 @@ export default async (req, context) => {
     return json({ error: "Not found." }, 404);
   } catch (err) {
     if (err instanceof hw.NotConnectedError) return json({ error: err.message, notConnected: true }, 503);
+    if (err instanceof crew.UserError) return json({ error: err.message }, 400);
     console.error(err);
     return json({ error: err.message || "Something went wrong." }, 500);
   }

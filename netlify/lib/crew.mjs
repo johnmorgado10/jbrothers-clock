@@ -13,7 +13,9 @@
 import { getJSON, setJSON } from "./store.mjs";
 import { gql } from "./homeworks.mjs";
 
-const GLOBAL_CATEGORY = 11154; // Homeworks "shop / drive" timer category
+const GLOBAL_CATEGORY = 11154;
+// A problem with what was sent (not a server hiccup): the phone shows it instead of retrying.
+export class UserError extends Error {} // Homeworks "shop / drive" timer category
 const r2 = (x) => Math.round(x * 100) / 100;
 const hours = (ms) => ms / 3600_000;
 
@@ -58,7 +60,7 @@ async function profileRates(userIds) {
 
 async function eventBasics(eventId) {
   const d = await gql(`query($id: SafeInt!) { event(eventId: $id) { id title customerId propertyId status } }`, { id: eventId });
-  if (!d.event) throw new Error("That visit wasn't found in Homeworks.");
+  if (!d.event) throw new UserError("That visit wasn't found in Homeworks.");
   return d.event;
 }
 
@@ -265,7 +267,7 @@ export async function visit(eventId) {
     { id: eventId }
   );
   const e = d.event;
-  if (!e) throw new Error("That visit wasn't found in Homeworks.");
+  if (!e) throw new UserError("That visit wasn't found in Homeworks.");
   const running = await getRunning();
   const segs = await getSegments(eventId);
   const tracked = trackedHours(e.timeEntries, segs, running, eventId);
@@ -343,7 +345,7 @@ export const sendUpsell = (eventId, customerId, upsellId) =>
 // attach it. Doing the upload server-side avoids browser upload restrictions.
 export async function addPhoto({ eventId, propertyId, kind, contentType, data }) {
   const bytes = Buffer.from(data, "base64");
-  if (!bytes.length) throw new Error("The photo was empty.");
+  if (!bytes.length) throw new UserError("The photo was empty.");
   const t = await gql(`mutation($c: String!, $s: SafeInt!) { createUpload(contentType: $c, size: $s) { key uploadUrl } }`, { c: contentType, s: bytes.length });
   const up = await fetch(t.createUpload.uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: bytes });
   if (!up.ok) throw new Error(`Photo upload failed (${up.status}).`);
@@ -377,9 +379,9 @@ export async function removePhoto({ kind, mediaId, ba, eventId, propertyId }) {
 export async function copyTime({ eventId, entryIds, userIds, by }) {
   const d = await gql(`query($id: SafeInt!) { event(eventId: $id) { id customerId propertyId timeEntries { id userId startedAt endedAt } } }`, { id: eventId });
   const ev = d.event;
-  if (!ev) throw new Error("That visit wasn't found in Homeworks.");
+  if (!ev) throw new UserError("That visit wasn't found in Homeworks.");
   const pick = ev.timeEntries.filter((t) => entryIds.includes(t.id) && t.endedAt);
-  if (!pick.length) throw new Error("That time isn't on this visit anymore. Refresh and try again.");
+  if (!pick.length) throw new UserError("That time isn't on this visit anymore. Refresh and try again.");
   const rates = await profileRates(userIds);
   const made = [], skipped = [];
   for (const uid of userIds) {
@@ -398,4 +400,44 @@ export async function copyTime({ eventId, entryIds, userIds, by }) {
   }
   await addSegments(eventId, made);
   return { ok: true, made: made.length, skipped: [...new Set(skipped)] };
+}
+
+// Edit one person's job entries on a visit: change times, delete, or add.
+export async function editEntries({ eventId, userId, update = [], add = [], del = [], by }) {
+  const d = await gql(`query($id: SafeInt!) { event(eventId: $id) { id customerId propertyId timeEntries { id userId startedAt endedAt } } }`, { id: eventId });
+  const ev = d.event;
+  if (!ev) throw new UserError("That visit wasn't found in Homeworks.");
+  const theirs = new Set(ev.timeEntries.filter((t) => t.userId === userId && t.endedAt).map((t) => t.id));
+  const now = Date.now();
+  const ok = (a, b) => Number.isFinite(a) && Number.isFinite(b) && b > a && b <= now + 2 * 60_000 && b - a <= 16 * 3600_000;
+  for (const u of update) if (!theirs.has(Number(u.id))) throw new UserError("That time entry isn't on this visit anymore. Refresh and try again.");
+  for (const x of [...update, ...add]) if (!ok(Date.parse(x.start), Date.parse(x.end))) throw new UserError("Each end time has to be after its start time, and not in the future.");
+  for (const id of del) if (!theirs.has(Number(id))) throw new UserError("That time entry isn't on this visit anymore. Refresh and try again.");
+  for (const u of update) {
+    await gql(`mutation($id: SafeInt!, $i: UpdateTimeEntryInput!) { updateTimeEntry(timeEntryId: $id, input: $i) { id } }`, {
+      id: Number(u.id), i: { startedAt: new Date(Date.parse(u.start)).toISOString(), endedAt: new Date(Date.parse(u.end)).toISOString() },
+    });
+  }
+  for (const id of del) await gql(`mutation($id: SafeInt!) { deleteTimeEntry(timeEntryId: $id) }`, { id: Number(id) });
+  const rates = add.length ? await profileRates([userId]) : {};
+  const made = [];
+  for (const a of add) {
+    const input = { eventId, userId, startedAt: new Date(Date.parse(a.start)).toISOString(), endedAt: new Date(Date.parse(a.end)).toISOString(), notes: `Crew clock · added${by ? ` by ${by}` : ""}` };
+    if (ev.customerId) input.customerId = ev.customerId;
+    if (ev.propertyId) input.propertyId = ev.propertyId;
+    if (rates[userId] != null) input.hourlyRate = rates[userId];
+    const r = await gql(`mutation($i: TimeEntryInput!) { addTimeEntry(input: $i) { id } }`, { i: input });
+    made.push({ id: r.addTimeEntry.id, userId, start: Date.parse(a.start), end: Date.parse(a.end), by: by || null });
+  }
+  await addSegments(eventId, made);
+  // Keep our own record in step with edits and deletes.
+  if (update.length || del.length) {
+    const segs = await getSegments(eventId);
+    const next = segs.filter((g) => !del.map(Number).includes(g.id)).map((g) => {
+      const u = update.find((x) => Number(x.id) === g.id);
+      return u ? { ...g, start: Date.parse(u.start), end: Date.parse(u.end) } : g;
+    });
+    await setJSON(segKey(eventId), next);
+  }
+  return { ok: true, updated: update.length, deleted: del.length, added: made.length };
 }
