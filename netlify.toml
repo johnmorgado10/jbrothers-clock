@@ -5,3 +5,8 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+[[headers]]
+  for = "/crew/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crew Clock</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Crew Clock">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#684500">
+<link rel="manifest" href="/crew/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/crew/img/apple-touch-icon.png">
+<link rel="icon" href="/crew/img/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+
+  /* Layout: one phone-width column. Schedule -> visit -> bottom timer bar, sheets slide up from the bottom. */
+  :root {
+    --green: #68801f; --green-700: #556a19; --green-800: #445415; --green-100: #e8ecdb; --green-300: #adb989;
+    --brown: #684500; --brown-700: #573a00; --brown-100: #f3f0ea; --brown-300: #d0c7b6;
+    --ink: #1c1a14; --gray: #6d6d6d; --gray-400: #a3a19c; --rule: #e4e0d9; --paper: #f2f2f2;
+    --danger: #a23b22; --danger-bg: #f5e3dd; --warn: #b7801a; --warn-bg: #f6ecd6;
+    --font-display: "Instrument Serif", Georgia, serif;
+    --font-body: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+    --r-sm: 8px; --r-md: 14px; --r-lg: 22px;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body { background: #d9d6cf; font-family: var(--font-body); color: var(--ink); font-size: 16px; line-height: 1.45; display: flex; justify-content: center; }
+  .app { width: 100%; max-width: 440px; height: 100%; background: var(--paper); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  button { font-family: inherit; cursor: pointer; color: inherit; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid rgba(104,128,31,.4); outline-offset: 2px; }
+  .serif { font-family: var(--font-display); font-weight: 400; letter-spacing: .01em; }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: var(--gray); }
+  .ico { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .offbar { background: #3a3a3a; color: #fff; font-size: 13px; padding: 8px 14px; display: flex; align-items: center; gap: 8px; }
+  .offbar.hidden { display: none; }
+  .offbar .dot { width: 8px; height: 8px; border-radius: 50%; background: #e0a12b; flex: none; }
+
+  header { background: #fff; border-bottom: 3px solid var(--rule); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+  header img { width: 30px; height: auto; }
+  header .back { background: none; border: 0; color: var(--green-700); font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+  header .title { font-size: 22px; color: var(--brown); line-height: 1; }
+  header .spacer { flex: 1; }
+  header .who { font-size: 12px; color: var(--gray); text-align: right; line-height: 1.2; }
+
+  main { flex: 1; overflow-y: auto; padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: #fff; border: 1.5px solid var(--rule); border-radius: var(--r-lg); padding: 16px; }
+  .card h3 { margin: 0 0 8px; font-family: var(--font-display); font-weight: 400; font-size: 24px; color: var(--brown); line-height: 1.1; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card h3 .link { font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--green-700); background: none; border: 0; display: inline-flex; gap: 4px; align-items: center; padding: 4px 0; }
+
+  .daypick { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1.5px solid var(--rule); border-radius: var(--r-md); padding: 10px 12px; }
+  .daypick b { font-size: 17px; }
+  .daypick button { background: none; border: 0; color: var(--green-700); font-size: 20px; padding: 4px 8px; }
+
+  .visit { display: flex; gap: 12px; align-items: stretch; text-align: left; width: 100%; background: #fff; border: 1.5px solid var(--rule); border-radius: var(--r-lg); padding: 12px; }
+  .visit:active { background: var(--brown-100); }
+  .vtag { width: 62px; border-radius: var(--r-md); background: var(--green); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; flex: none; }
+  .vtag.mow { background: var(--brown); }
+  .vtag .ico { font-size: 22px; }
+  .visit .t { font-weight: 700; font-size: 17px; line-height: 1.2; }
+  .visit .c { color: var(--ink); font-size: 14px; }
+  .visit .a { color: var(--gray); font-size: 13px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .chip { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--brown-100); color: var(--brown); }
+  .chip.live { background: var(--green-100); color: var(--green-800); }
+  .chip.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 5px; animation: pulse 1.4s infinite; }
+  .chip.done { background: #e9e9e6; color: var(--gray); }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  .vhead { display: flex; gap: 12px; align-items: flex-start; }
+  .vhead .vtag { width: 70px; height: 78px; }
+  .vhead h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 28px; line-height: 1.05; color: var(--brown); text-wrap: balance; }
+  .vhead .c { font-weight: 600; margin-top: 4px; }
+  .vhead .a { color: var(--gray); font-size: 14px; }
+  .actions { display: grid; grid-template-columns: 48px 1fr 1.4fr; gap: 8px; }
+  .btn { border: 0; border-radius: var(--r-sm); padding: 12px 14px; font-weight: 700; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 46px; }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:active { background: var(--green-800); }
+  .btn-brown { background: var(--brown); color: #fff; }
+  .btn-outline { background: #fff; color: var(--green-700); border: 1.5px solid var(--green-300); }
+  .btn-ghost { background: #fff; color: var(--gray); border: 1.5px solid var(--rule); }
+  .btn-danger { background: #fff; color: var(--danger); border: 1.5px solid #e7c4bb; }
+
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 3px solid var(--rule); }
+  .tabs button { background: none; border: 0; padding: 12px; font-size: 16px; font-weight: 700; color: var(--gray-400); position: relative; }
+  .tabs button.on { color: var(--brown); }
+  .tabs button.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 3px; background: var(--brown); }
+
+  .li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1.5px solid var(--rule); }
+  .li:first-of-type { border-top: 0; }
+  .li b { display: block; font-size: 15px; }
+  .li span { color: var(--gray); font-size: 14px; }
+  .li2 { border-top: 1.5px solid var(--rule); }
+  .li2:first-of-type { border-top: 0; }
+  .li2 summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 11px 0; cursor: pointer; }
+  .li2 summary::-webkit-details-marker { display: none; }
+  .li2 .ln { flex: 1; min-width: 0; font-weight: 700; font-size: 15px; }
+  .li2 .ln small { display: block; font-weight: 500; font-size: 12px; color: var(--gray); }
+  .pill { flex: none; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--brown-100); color: var(--brown); font-variant-numeric: tabular-nums; }
+  .pill.bh { background: var(--green-100); color: var(--green-800); }
+  .chev { color: var(--gray-400); font-size: 20px; transition: transform .15s; }
+  .li2[open] .chev { transform: rotate(90deg); }
+  .li2 .desc { color: var(--gray); font-size: 14px; padding: 0 0 12px; }
+  .li2 .lq { display: block; color: var(--ink, #222); margin-bottom: 4px; }
+  .upd { width: 100%; margin-top: 10px; }
+  .updhint { text-align: center; font-size: 12.5px; color: var(--gray); margin-top: 6px; }
+  .chg { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1.5px solid var(--rule); font-size: 15px; }
+  .chg:first-of-type { border-top: 0; }
+  .chg b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .chg s { color: var(--gray-400); margin-right: 6px; font-weight: 500; }
+  .alert { background: var(--brown-100); color: var(--brown); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 10px 0; }
+  .note { background: var(--brown-100); border-radius: var(--r-sm); padding: 10px 12px; font-size: 14px; margin-top: 8px; }
+  .note small { display: block; color: var(--gray); font-size: 12px; margin-top: 3px; }
+  .empty { color: var(--gray); font-size: 14px; display: flex; gap: 6px; align-items: center; }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .th { position: relative; width: 76px; height: 76px; }
+  .th img { display: block; }
+  .th .x { position: absolute; top: -7px; right: -7px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; background: #3a3a3a; color: #fff; font-size: 15px; line-height: 1; display: grid; place-items: center; padding: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .th .up { position: absolute; inset: 0; border-radius: var(--r-md); background: rgba(255,255,255,.7); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--green-800); }
+  .th .ok { position: absolute; left: 5px; bottom: 5px; width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; }
+  .th .ok svg { width: 11px; height: 11px; }
+  .rmprev { width: 100%; max-height: 260px; object-fit: cover; border-radius: var(--r-md); margin: 4px 0 12px; }
+  .thumbs img, .addmedia { width: 76px; height: 76px; border-radius: var(--r-md); object-fit: cover; }
+  .addmedia { border: 2px dashed var(--brown-300); background: #fff; color: var(--gray); font-size: 11px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .addmedia .ico { font-size: 22px; }
+  .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ba .label { display: block; margin-bottom: 4px; }
+
+  .crew-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1.5px solid var(--rule); }
+  .crew-row:first-of-type { border-top: 0; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--green-100); color: var(--green-800); font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 14px; flex: none; }
+  .avatar.off { background: #e9e9e6; color: var(--gray); }
+  .crew-row .n { flex: 1; min-width: 0; }
+  .crew-row .n b { display: block; }
+  .crew-row .n small { color: var(--gray); font-size: 12px; }
+  .crew-row .tm { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--green-800); }
+  a.addr { color: var(--green-700); text-decoration: underline; text-underline-offset: 3px; display: block; }
+  a.crew-row.addr { display: flex; }
+  .mini { border: 1.5px solid var(--rule); background: #fff; color: var(--gray); border-radius: var(--r-sm); padding: 6px 10px; font-size: 12px; font-weight: 700; }
+
+  .bar { background: #fff; border-top: 3px solid var(--rule); padding: 12px 14px 14px; }
+  .bar .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .bar .clock { font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 600; letter-spacing: .02em; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  .bar .clock small { font-size: 12px; color: var(--gray); font-weight: 600; letter-spacing: .05em; }
+  .bar .clock.idle { color: var(--gray-400); }
+  .prog { height: 8px; background: var(--rule); border-radius: 99px; margin-top: 10px; overflow: hidden; }
+  .prog div { height: 100%; background: var(--green); border-radius: 99px; transition: width .4s; }
+  .prog div.over { background: var(--danger); }
+  .prog { height: 10px; }
+  .prog div.live { background-image: repeating-linear-gradient(-45deg, rgba(255,255,255,.28) 0 6px, transparent 6px 12px); background-size: 17px 100%; animation: pole .7s linear infinite; }
+  @keyframes pole { from { background-position: 0 0; } to { background-position: 17px 0; } }
+  .meta .overtxt { color: var(--danger); font-weight: 700; }
+  .bar .meta { display: flex; justify-content: space-between; margin-top: 6px; font-size: 13px; color: var(--gray); font-weight: 600; }
+  .bar .btn { min-width: 150px; font-size: 14px; }
+
+  .scrim { position: absolute; inset: 0; background: rgba(28,26,20,.45); display: none; align-items: flex-end; z-index: 20; }
+  .scrim.on { display: flex; }
+  .sheet { background: #fff; width: 100%; border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 10px 16px 18px; max-height: 88%; overflow-y: auto; animation: up .22s cubic-bezier(.2,.7,.2,1); }
+  @keyframes up { from { transform: translateY(30px); opacity: .6; } }
+  @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } .chip.live::before { animation: none; } .prog div.live { animation: none; } }
+  .grab { width: 44px; height: 5px; border-radius: 99px; background: var(--rule); margin: 0 auto 12px; }
+  .sheet h2 { margin: 0 0 4px; font-family: var(--font-display); font-weight: 400; font-size: 30px; color: var(--brown); }
+  .sheet p { margin: 0 0 12px; color: var(--gray); font-size: 14px; }
+  .pick { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1.5px solid var(--rule); border-radius: var(--r-md); margin-bottom: 8px; width: 100%; background: #fff; text-align: left; }
+  .pick.on { border-color: var(--green); background: var(--green-100); }
+  .box { width: 24px; height: 24px; border-radius: 6px; border: 2px solid var(--brown-300); display: flex; align-items: center; justify-content: center; color: #fff; flex: none; }
+  .pick.on .box { background: var(--green); border-color: var(--green); }
+  .pick .n { flex: 1; }
+  .pick .n b { display: block; }
+  .pick .n small { font-size: 12px; color: var(--gray); }
+  .pick .n small.warn { color: var(--warn); font-weight: 600; }
+  .sec { margin: 14px 0 8px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  textarea, .tinput { width: 100%; font-family: inherit; font-size: 16px; padding: 10px 12px; border: 1.5px solid var(--brown-300); border-radius: var(--r-sm); }
+  textarea { min-height: 90px; resize: vertical; }
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 8px 0 4px; }
+  .stepper button { width: 46px; height: 46px; border-radius: 50%; border: 1.5px solid var(--brown-300); background: #fff; font-size: 22px; color: var(--brown); }
+  .stepper b { font-size: 26px; font-variant-numeric: tabular-nums; min-width: 120px; text-align: center; }
+  .summary { border: 1.5px solid var(--rule); border-radius: var(--r-md); }
+  .summary div { display: flex; justify-content: space-between; padding: 10px 12px; border-top: 1.5px solid var(--rule); font-variant-numeric: tabular-nums; }
+  .summary div:first-child { border-top: 0; }
+  .toast { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; z-index: 30; opacity: 0; pointer-events: none; transition: opacity .2s; white-space: nowrap; }
+  .toast.on { opacity: 1; }
+  .vtag.done { background: transparent; color: var(--ink); }
+  .visit.done .t { text-decoration: line-through; text-decoration-thickness: 2px; }
+  .visit.done .chips, .visit.done .a { display: none; }
+  .btn-reopen { background: #7a2716; color: #fff; width: 100%; font-size: 15px; letter-spacing: .06em; text-transform: none; }
+  .bar.done .clock, .bar.done .meta { color: var(--gray-400); }
+  .bar.done .prog div { background: var(--rule); }
+  .act { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; margin-bottom: 8px; border: 1.5px solid var(--rule); border-radius: var(--r-md); background: var(--brown-100); font-size: 17px; font-weight: 600; color: var(--ink); text-align: left; }
+  .act .ico { font-size: 24px; color: var(--brown); }
+  .act small { display: block; font-size: 12px; font-weight: 500; color: var(--gray); }
+  .sheet-x { float: right; width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--brown-100); color: var(--ink); font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .confirm-box { text-align: center; padding: 6px 0 4px; }
+  .confirm-box .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
+  .hidden { display: none !important; }
+
+  body { padding-top: env(safe-area-inset-top); }
+  .app { padding-bottom: env(safe-area-inset-bottom); }
+  .signin { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 6px; text-align: center; }
+  .signin img { width: 72px; border-radius: 18px; }
+  .signin h1 { margin: 10px 0 0; font-family: var(--font-display); font-weight: 400; font-size: 38px; color: var(--brown); }
+  .signin p { margin: 0 0 10px; color: var(--gray); }
+  .pin-dots { display: flex; gap: 14px; min-height: 18px; margin: 8px 0 16px; justify-content: center; }
+  .pin-dots div { width: 16px; height: 16px; border-radius: 50%; background: var(--brown); }
+  .pin-dots .empty { background: none; border: 2px solid var(--brown-300); }
+  .pad { display: grid; grid-template-columns: repeat(3, 76px); gap: 10px; }
+  .pad button { height: 64px; border-radius: 16px; border: 1.5px solid var(--rule); background: #fff; font-size: 26px; font-weight: 600; color: var(--ink); }
+  .pad button:active { background: var(--brown-100); }
+  .pad .fn { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--gray); }
+  .err { color: var(--danger); font-weight: 600; min-height: 22px; margin-top: 10px; font-size: 14px; }
+  .loading { color: var(--gray); font-size: 14px; text-align: center; padding: 30px 0; }
+  .stale { font-size: 12px; color: var(--gray); text-align: center; }
+  .linkbtn { background: none; border: 0; color: var(--green-700); font-weight: 700; font-size: 13px; padding: 4px 0; }
+  .th .x { cursor: pointer; }
+  .chip.skip { background: var(--danger-bg); color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="offbar hidden" id="offbar"></div>
+  <header id="hdr"></header>
+  <main id="main"></main>
+  <div class="bar hidden" id="bar"></div>
+  <div class="scrim" id="scrim"><div class="sheet" id="sheet"></div></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// Crew Clock: John, James and Juan run job time for the crew on their Homeworks visits.
+// Every change goes into a queue on this phone first and is sent to Homeworks right away
+// when there's signal, or later when signal comes back. Visits are kept on the phone so
+// the app still works with no signal.
+const I = {
+  home: '<svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  mow: '<svg class="ico" viewBox="0 0 24 24"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></svg>',
+  back: '<svg class="ico" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',
+  dir: '<svg class="ico" viewBox="0 0 24 24"><path d="M2 12a1 1 0 0 1 .3-.7l9-9a1 1 0 0 1 1.4 0l9 9a1 1 0 0 1 0 1.4l-9 9a1 1 0 0 1-1.4 0l-9-9A1 1 0 0 1 2 12z"/><path d="M9 14v-2a2 2 0 0 1 2-2h4"/><path d="m13 8 2 2-2 2"/></svg>',
+  play: '<svg class="ico" viewBox="0 0 24 24"><path d="M6 3l14 9-14 9V3z" fill="currentColor"/></svg>',
+  stop: '<svg class="ico" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor"/></svg>',
+  check: '<svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>',
+  skip: '<svg class="ico" viewBox="0 0 24 24"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>',
+  dots: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>',
+  plus: '<svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  img: '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>',
+  done: '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/></svg>',
+  reopen: '<svg class="ico" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  chat: '<svg class="ico" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>',
+  call: '<svg class="ico" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+  bag: '<svg class="ico" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+  x: '<svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  info: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+  user: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>',
+  phone: '<svg class="ico" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 18h.01"/></svg>',
+};
+const LEAF = "/crew/img/icon-192.png";
+
+// ---------- small helpers ----------
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const initials = (n) => String(n || "?").split(" ").map((p) => p[0]).slice(0, 2).join("");
+const t12 = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const hms = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, "0")).join(":"); };
+const hm = (h) => { const m = Math.round(Math.max(0, h) * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
+const r2 = (x) => Math.round(x * 100) / 100;
+const now = () => Date.now();
+const ymd = (d) => d.toLocaleDateString("en-CA");
+const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return ymd(d); };
+const mapsUrl = (a) => "https://maps.apple.com/?daddr=" + encodeURIComponent(a);
+const store = {
+  get(k, f = null) { try { const v = localStorage.getItem(k); return v == null ? f : JSON.parse(v); } catch { return f; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 2600); }
+
+// ---------- talking to the server ----------
+let session = store.get("crewSession"), me = store.get("crewMe");
+let offline = !navigator.onLine;
+
+async function api(path, body, { timeout = 20000 } = {}) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeout);
+  let res;
+  try {
+    res = await fetch("/api/" + path, {
+      method: "POST", signal: ctl.signal,
+      headers: { "Content-Type": "application/json", ...(session ? { Authorization: "Bearer " + session } : {}) },
+      body: JSON.stringify(body || {}),
+    });
+  } catch (e) {
+    const err = new Error("No signal"); err.network = true; throw err;
+  } finally { clearTimeout(timer); }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.signedOut) { signOut(); const err = new Error(data.error || "Please sign in again."); err.signedOut = true; throw err; }
+  if (!res.ok) { const err = new Error(data.error || "Something went wrong."); err.status = res.status; err.retry = res.status >= 500 || res.status === 429; throw err; }
+  setOffline(false);
+  return data;
+}
+
+function setOffline(v) { if (offline !== v) { offline = v; drawOff(); } }
+
+// ---------- the queue (IndexedDB, so photos fit) ----------
+const DB = new Promise((ok, bad) => {
+  const r = indexedDB.open("crewclock", 1);
+  r.onupgradeneeded = () => r.result.createObjectStore("q", { keyPath: "qid", autoIncrement: true });
+  r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error);
+});
+const tx = async (mode, fn) => { const db = await DB; return new Promise((ok, bad) => { const t = db.transaction("q", mode); const s = t.objectStore("q"); const out = fn(s); t.oncomplete = () => ok(out && out.result !== undefined ? out.result : out); t.onerror = () => bad(t.error); }); };
+const qAdd = (item) => tx("readwrite", (s) => s.add(item));
+const qAll = () => tx("readonly", (s) => s.getAll());
+const qDel = (qid) => tx("readwrite", (s) => s.delete(qid));
+const qPut = (item) => tx("readwrite", (s) => s.put(item));
+let queue = []; // in-memory copy for drawing
+
+async function refreshQueue() { queue = await qAll(); drawOff(); }
+
+function drawOff() {
+  const b = $("offbar"), n = queue.length;
+  b.classList.toggle("hidden", !offline && !n);
+  b.innerHTML = offline
+    ? `<span class="dot"></span><span>No signal. Everything saves on this phone${n ? ` · <b>${n} waiting to send</b>` : ""}</span>`
+    : `<span class="dot"></span><span>Sending ${n} ${n === 1 ? "change" : "changes"} to Homeworks…</span>`;
+}
+
+// Add a change: save it on the phone, show it right away, then try to send it.
+async function act(type, eventId, body, label) {
+  const item = { type, eventId, body: { ...body, eventId }, made: now(), by: me?.name };
+  item.qid = await qAdd(item);
+  queue.push(item);
+  const v = visits[eventId];
+  if (v) { applyLocal(v, item); saveVisit(v); }
+  render();
+  drawOff();
+  if (label) toast(offline ? `${label} · sends when signal is back` : label);
+  flush();
+}
+
+let flushing = false;
+async function flush() {
+  if (flushing || !session) return;
+  flushing = true;
+  let sent = 0;
+  const touched = new Set();
+  try {
+    for (const item of await qAll()) {
+      try {
+        await api("crew/" + item.type, item.body, { timeout: item.type === "photo" ? 90000 : 25000 });
+        await qDel(item.qid); sent++; touched.add(item.eventId);
+      } catch (e) {
+        if (e.network || e.signedOut) { if (e.network) setOffline(true); break; }
+        if (e.retry) {
+          // Homeworks or the server had a hiccup: keep it and try again later, in order.
+          item.tries = (item.tries || 0) + 1;
+          if (item.tries < 6) { await qPut(item); break; }
+        }
+        await qDel(item.qid); touched.add(item.eventId);
+        const failed = store.get("crewFailed", []);
+        failed.unshift({ type: item.type, eventId: item.eventId, made: item.made, error: e.message });
+        store.set("crewFailed", failed.slice(0, 30));
+        toast(`Couldn't save: ${e.message}`);
+      }
+    }
+  } finally {
+    flushing = false;
+    await refreshQueue();
+  }
+  if (sent && wasOffline) { toast(`Signal back. Sent ${sent} ${sent === 1 ? "change" : "changes"} to Homeworks`); }
+  wasOffline = offline;
+  if (touched.size) {
+    for (const id of touched) if (view.name === "visit" && view.id === id) await loadVisit(id, { quiet: true });
+    if (view.name === "schedule") loadSchedule(day, { quiet: true });
+  }
+}
+let wasOffline = offline;
+addEventListener("online", () => { setOffline(false); flush(); });
+addEventListener("offline", () => { setOffline(true); wasOffline = true; });
+setInterval(() => { if (queue.length) flush(); }, 20000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { flush(); if (view.name === "schedule") loadSchedule(day, { quiet: true }); else loadVisit(view.id, { quiet: true }); } });
+
+// ---------- local copies of visits ----------
+const visits = {}; // id -> visit (from server, with queued changes applied)
+let crewList = store.get("crewList", []);
+const saveVisit = (v) => store.set("crewVisit:" + v.id, v);
+const cachedVisit = (id) => visits[id] || store.get("crewVisit:" + id);
+const nameOf = (id) => crewList.find((c) => c.id === +id)?.name || (id == me?.id ? me.name : "Crew member");
+const firstOf = (id) => nameOf(id).split(" ")[0];
+
+// What a queued change does to the visit on screen (before Homeworks confirms it).
+function applyLocal(v, item) {
+  const b = item.body, at = b.at ? Date.parse(b.at) : item.made;
+  v.running = v.running || {};
+  switch (item.type) {
+    case "start": for (const u of b.userIds) v.running[u] = at; break;
+    case "stop": for (const u of b.userIds) if (v.running[u] != null) { v.done += (Date.parse(b.end) - v.running[u]) / 3600000; delete v.running[u]; } break;
+    case "fix": if (v.running[b.userId] != null) v.running[b.userId] = Date.parse(b.start); break;
+    case "note": v.notes.unshift({ text: b.text + " — " + (me?.name || "").split(" ")[0], by: "You", at: new Date(item.made).toISOString() }); break;
+    case "visit-note": v.visitNote = b.text; break;
+    case "prop-note": v.propNotes = b.text; break;
+    case "labor": for (const p of b.plan) { const it = v.items.find((x) => x.id === p.lineItemId); if (it) it.qty = p.to; } break;
+    case "complete": for (const [u, st] of Object.entries(v.running)) { v.done += (at - st) / 3600000; delete v.running[u]; } v.status = "CLOSED"; break;
+    case "skip": v.status = "SKIPPED"; break;
+    case "reopen": v.status = "OPEN"; break;
+    case "upsell": v.sentUpsell = b.name; break;
+    case "photo": v.media[b.kind].push({ local: item.qid, src: "data:" + b.contentType + ";base64," + b.data }); break;
+    case "photo-remove": v.media[b.kind] = v.media[b.kind].filter((m) => m.id !== b.mediaId); break;
+  }
+}
+const liveHours = (v) => v.done + Object.values(v.running || {}).reduce((s, st) => s + Math.max(0, now() - st) / 3600000, 0);
+
+async function loadVisit(id, { quiet } = {}) {
+  if (!quiet && !cachedVisit(id)) { $("main").innerHTML = `<div class="loading">Loading visit…</div>`; }
+  try {
+    const d = await api("crew/visit", { eventId: id });
+    const v = d.visit;
+    v.running = Object.fromEntries(Object.entries(v.running || {}).map(([u, s]) => [u, Number(s)]));
+    v.fetched = now();
+    crewList = d.crew; store.set("crewList", crewList);
+    for (const item of (await qAll()).filter((x) => x.eventId === id)) applyLocal(v, item);
+    visits[id] = v; saveVisit(v);
+  } catch (e) {
+    if (e.network) setOffline(true);
+    else if (!quiet) toast(e.message);
+  }
+  if (view.name === "visit" && view.id === id) render();
+}
+
+// ---------- schedule ----------
+let view = { name: "schedule" }, tab = "visit";
+let day = ymd(new Date());
+const sched = {}; // date -> list
+
+async function loadSchedule(date, { quiet } = {}) {
+  if (!sched[date]) sched[date] = store.get("crewSched:" + date);
+  if (!quiet && !sched[date] && view.name === "schedule") render();
+  try {
+    const d = await api("crew/schedule", { date });
+    sched[date] = d.visits; store.set("crewSched:" + date, d.visits);
+    if (date === ymd(new Date())) api("crew/crew", {}).then((c) => { crewList = c.crew; store.set("crewList", crewList); if (view.name === "schedule") render(); }).catch(() => {});
+  } catch (e) {
+    if (e.network) setOffline(true); else if (!quiet) toast(e.message);
+  }
+  if (view.name === "schedule" && day === date) render();
+}
+
+// Keep the next couple of days on the phone for no-signal spots (once every 20 min at most).
+async function prefetch() {
+  if (offline) return;
+  const today = ymd(new Date());
+  for (const d of [today, addDays(today, 1)]) {
+    if (d !== day) await loadSchedule(d, { quiet: true });
+    for (const v of (sched[d] || []).slice(0, 15)) {
+      const c = cachedVisit(v.id);
+      if (!c || now() - (c.fetched || 0) > 20 * 60000) { await loadVisit(v.id, { quiet: true }); if (offline) return; }
+    }
+  }
+}
+
+// ---------- screens ----------
+function render() {
+  if (!session) return renderSignIn();
+  renderHeader();
+  view.name === "schedule" ? renderSchedule() : renderVisit();
+}
+
+function renderHeader() {
+  const h = $("hdr");
+  h.classList.remove("hidden");
+  if (view.name === "schedule") {
+    h.innerHTML = `<img src="${LEAF}" alt="" style="border-radius:7px"><div><div class="label">J-Brothers</div><div class="title serif">Crew clock</div></div><div class="spacer"></div><div class="who">Signed in as<br><b>${esc((me?.name || "").split(" ")[0])}</b><br><button class="linkbtn" id="out" type="button">Sign out</button></div>`;
+    $("out").onclick = () => {
+      openSheet(`<h2>Sign out?</h2><p>${queue.length ? `<b>${queue.length} changes haven't been sent yet.</b> They stay on this phone and send after you sign back in.` : "You'll need your PIN to sign back in."}</p>
+        <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-brown" type="button" id="go">Sign out</button></div>`);
+      $("cx").onclick = closeSheet; $("go").onclick = () => { closeSheet(); signOut(); };
+    };
+  } else {
+    h.innerHTML = `<button class="back" id="back" type="button">${I.back} Schedule</button><div class="spacer"></div><img src="${LEAF}" alt="" style="border-radius:7px">`;
+    $("back").onclick = () => { view = { name: "schedule" }; render(); loadSchedule(day, { quiet: true }); };
+  }
+}
+
+const statusOf = (s) => ({ CLOSED: "done", SKIPPED: "skipped" }[s] || "open");
+
+function renderSchedule() {
+  $("bar").classList.add("hidden");
+  const today = ymd(new Date());
+  const diff = Math.round((Date.parse(day + "T12:00:00") - Date.parse(today + "T12:00:00")) / 86400000);
+  const label = (diff === 0 ? "Today · " : diff === -1 ? "Yesterday · " : diff === 1 ? "Tomorrow · " : "") + new Date(day + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const list = sched[day];
+  $("main").innerHTML = `
+    <div class="daypick"><button type="button" id="dprev" aria-label="Previous day">‹</button><b>${label}</b><button type="button" id="dnext" aria-label="Next day">›</button></div>
+    ${!list ? `<div class="loading">${offline ? "No signal, and this day isn't saved on the phone yet." : "Loading visits…"}</div>` :
+      !list.length ? `<div class="card"><div class="empty">${I.info} No visits assigned to you this day</div></div>` :
+      list.map((s) => {
+        const v = cachedVisit(s.id);
+        const status = statusOf(v?.status || s.status);
+        const runIds = v ? Object.keys(v.running || {}) : s.onJob.map(String);
+        const hrs = v ? liveHours(v) : s.tracked;
+        const chips = status === "done" ? `<span class="chip done">Completed</span>` : status === "skipped" ? `<span class="chip skip">Skipped</span>` :
+          runIds.length ? `<span class="chip live">${runIds.map(firstOf).join(", ")} on the job</span>` : `<span class="chip">${s.crew.map(esc).join(", ")}</span>`;
+        const tag = status !== "open" ? `<div class="vtag done">${I.done}Visit</div>` : `<div class="vtag ${s.mow ? "mow" : ""}">${s.mow ? I.mow : I.home}${s.mow ? "Mow" : "Visit"}</div>`;
+        return `<button class="visit ${status !== "open" ? "done" : ""}" type="button" data-v="${s.id}">
+          ${tag}
+          <div><div class="t">${esc(s.title)}</div><div class="c">${esc(s.customer)}</div><div class="a">${esc(s.address)}</div><div class="chips">${chips}${s.bh ? `<span class="chip">${hm(hrs)} / BH ${s.bh}h</span>` : ""}</div></div>
+        </button>`;
+      }).join("")}
+    ${diff !== 0 || !crewList.length ? "" : `<div class="card"><div class="label" style="margin-bottom:8px">Crew today</div>
+      ${crewList.map((c) => {
+        const job = jobOf(c.id);
+        const st = job ? `<small>On ${esc(job.title)} since ${t12(job.start)}</small>` :
+          c.clockedIn ? `<small>Clocked in${c.since ? " " + t12(Date.parse(c.since)) : ""} · shop / drive time</small>` : `<small style="color:var(--warn);font-weight:600">Not clocked in</small>`;
+        return `<div class="crew-row"><div class="avatar ${c.clockedIn || job ? "" : "off"}">${esc(initials(c.name))}</div><div class="n"><b>${esc(c.name)}</b>${st}</div></div>`;
+      }).join("")}</div>`}`;
+  $("dprev").onclick = () => { day = addDays(day, -1); render(); loadSchedule(day); };
+  $("dnext").onclick = () => { day = addDays(day, 1); render(); loadSchedule(day); };
+  $("main").querySelectorAll("[data-v]").forEach((b) => (b.onclick = () => openVisit(+b.dataset.v)));
+}
+
+// Where someone is working right now, using this phone's copies of visits first.
+function jobOf(uid) {
+  for (const v of Object.values(visits)) if (v.running && v.running[uid] != null) return { eventId: v.id, title: v.title, start: v.running[uid] };
+  const c = crewList.find((x) => x.id === +uid);
+  return c?.onJob && !(visits[c.onJob.eventId]) ? c.onJob : null;
+}
+
+function openVisit(id) {
+  view = { name: "visit", id }; tab = "visit";
+  const c = store.get("crewVisit:" + id);
+  if (c && !visits[id]) visits[id] = c;
+  render();
+  $("main").scrollTop = 0;
+  loadVisit(id, { quiet: !!c });
+}
+
+function thumbs(arr, kind, alt) {
+  return arr.map((it) => `<div class="th"><img src="${esc(it.src)}" alt="${alt}" loading="lazy">${it.local ? `<div class="up">${offline ? "Waiting for signal" : "Saving…"}</div>` : `<span class="ok">${I.check}</span><button class="x" type="button" data-rm="${kind}:${it.id}" aria-label="Remove photo">✕</button>`}</div>`).join("");
+}
+
+function renderVisit() {
+  const v = visits[view.id];
+  if (!v) { $("bar").classList.add("hidden"); $("main").innerHTML = `<div class="loading">${offline ? "No signal, and this visit isn't saved on the phone yet." : "Loading visit…"}</div>`; return; }
+  const status = statusOf(v.status);
+  const m = v.running || {};
+  const ids = Object.keys(m);
+  const labor = v.items.filter((it) => it.labor && it.bh > 0);
+  const crewCard = `
+    <div class="card"><h3>Crew on this job ${ids.length ? `<button class="link" id="addp" type="button">${I.plus} Add</button>` : ""}</h3>
+      ${ids.length ? ids.map((cid) => `
+        <div class="crew-row"><div class="avatar">${esc(initials(nameOf(cid)))}</div>
+          <div class="n"><b>${esc(nameOf(cid))}</b><small>Started ${t12(m[cid])} · <button class="mini" type="button" data-fix="${cid}" style="padding:2px 8px">Fix time</button></small></div>
+          <div class="tm" data-tm="${cid}">${hms(now() - m[cid])}</div>
+          <button class="mini" type="button" data-stop1="${cid}">Stop</button></div>`).join("")
+      : `<div class="empty">${I.info} No one is on this job. Tap Start work.</div>`}
+    </div>`;
+
+  const visitTab = `
+    <div class="card"><h3>Visit note <button class="link" id="editvn" type="button">Edit</button></h3>${v.visitNote ? `<div style="white-space:pre-line">${esc(v.visitNote)}</div>` : `<div class="empty">${I.info} No visit note</div>`}</div>
+    <div class="card"><h3>Line items</h3>${v.items.length ? v.items.map((it, i) => {
+      const generic = /^general materials$/i.test(it.n) && it.d;
+      const title = generic ? it.d.split("\n")[0].replace(/\.$/, "") : it.n;
+      return `<details class="li2"><summary><span class="ln">${i + 1}. ${esc(title)}${generic ? `<small>General Materials</small>` : ""}</span>
+        <span class="pill ${it.labor ? "bh" : ""}">${it.labor && it.bh ? `BH ${it.bh}` : `Qty ${it.qty}`}</span><span class="chev">›</span></summary>
+        <div class="desc">${it.labor && it.bh ? `<span class="lq">Labor qty on visit: <b>${it.qty} h</b></span>` : ""}<span style="white-space:pre-line">${esc(it.d) || "No description"}</span></div></details>`;
+    }).join("") : `<div class="empty">${I.info} No line items</div>`}
+    ${status === "open" && labor.length ? `<button class="btn btn-outline upd" type="button" id="updlabor">Update labor qty</button>
+      <div class="updhint">Tracked ${hm(liveHours(v))} · labor qty ${r2(labor.reduce((s, it) => s + it.qty, 0))} h</div>` : ""}</div>
+    <div class="card"><h3>Dispatch notes <button class="link" id="addnote" type="button">${I.plus} Add note</button></h3>
+      ${v.notes.length ? v.notes.map((n) => `<div class="note" style="white-space:pre-line">${esc(n.text)}<small>${esc(n.by)}${n.at ? " · " + esc(new Date(n.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : ""}</small></div>`).join("") : `<div class="empty">${I.info} No dispatch notes</div>`}</div>
+    <div class="card"><h3>Before and after</h3>
+      <div class="ba">
+        <div><span class="label">Before</span><div class="thumbs">${thumbs(v.media.before, "before", "Before photo")}<label class="addmedia">${I.img}Add<input type="file" accept="image/*" class="hidden" multiple data-up="before"></label></div></div>
+        <div><span class="label">After</span><div class="thumbs">${thumbs(v.media.after, "after", "After photo")}<label class="addmedia">${I.img}Add<input type="file" accept="image/*" class="hidden" multiple data-up="after"></label></div></div>
+      </div></div>
+    <div class="card"><h3>Visit media</h3><div class="thumbs">${thumbs(v.media.event, "event", "Visit photo")}<label class="addmedia">${I.img}Add media<input type="file" accept="image/*" class="hidden" multiple data-up="event"></label></div></div>`;
+
+  const propTab = `
+    <div class="card"><h3>Property notes <button class="link" id="editprop" type="button">Edit</button></h3>
+      ${v.propNotes ? `<div class="note" style="white-space:pre-line">${esc(v.propNotes)}</div>` : `<div class="empty">${I.info} No property notes</div>`}</div>
+    <div class="card"><h3>Property media</h3><div class="thumbs">${thumbs(v.media.prop, "prop", "Property photo")}<label class="addmedia">${I.img}Add media<input type="file" accept="image/*" class="hidden" multiple data-up="prop"></label></div></div>
+    <div class="card"><h3>Customer info</h3>
+      <div class="crew-row">${I.user}<div class="n">${esc(v.customer)}</div></div>
+      ${v.phone ? `<div class="crew-row">${I.phone}<div class="n">${esc(v.phone)}</div></div>` : ""}
+      ${v.address ? `<a class="crew-row addr" href="${mapsUrl(v.address)}">${I.home}<div class="n">${esc(v.address)}</div></a>` : ""}</div>`;
+
+  $("main").innerHTML = `
+    <div class="vhead">${status !== "open" ? `<div class="vtag done">${I.done}Visit</div>` : `<div class="vtag ${v.mow ? "mow" : ""}">${v.mow ? I.mow : I.home}${v.mow ? "Mow" : "Visit"}</div>`}
+      <div style="flex:1;min-width:0"><h2>${esc(v.title)}</h2><div class="c">${esc(v.customer)}</div>${v.address ? `<a class="a addr" href="${mapsUrl(v.address)}">${esc(v.address)}</a>` : ""}</div>
+      ${v.address ? `<a class="mini" id="dir" href="${mapsUrl(v.address)}" aria-label="Directions in Apple Maps" style="font-size:20px;padding:8px;display:inline-flex">${I.dir}</a>` : ""}</div>
+    ${status !== "open" ? `<button class="btn btn-reopen" type="button" id="reopen">${I.reopen} Re-open event</button>` :
+    `<div class="actions"><button class="btn btn-ghost" type="button" aria-label="More actions" id="more">${I.dots}</button><button class="btn btn-danger" type="button" id="skip">${I.skip} Skip</button><button class="btn btn-outline" type="button" id="complete">${I.check} Complete</button></div>`}
+    ${status !== "open" ? "" : crewCard}
+    <div class="tabs"><button type="button" data-tab="visit" class="${tab === "visit" ? "on" : ""}">Visit</button><button type="button" data-tab="property" class="${tab === "property" ? "on" : ""}">Property</button></div>
+    ${tab === "visit" ? visitTab : propTab}`;
+
+  $("main").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; renderVisit(); }));
+  $("main").querySelectorAll("[data-up]").forEach((inp) => (inp.onchange = () => addPhotos(v, inp.dataset.up, [...inp.files])));
+  $("main").querySelectorAll("[data-rm]").forEach((b) => (b.onclick = () => removePhoto(v, ...b.dataset.rm.split(":"))));
+  $("main").querySelectorAll("[data-stop1]").forEach((b) => (b.onclick = () => stopSheet(v, [+b.dataset.stop1])));
+  $("main").querySelectorAll("[data-fix]").forEach((b) => (b.onclick = () => fixSheet(v, +b.dataset.fix)));
+  const on = (id, fn) => { if ($(id)) $(id).onclick = fn; };
+  on("addp", () => pickSheet(v, true));
+  on("addnote", () => noteSheet(v));
+  on("editprop", () => textSheet(v, "prop"));
+  on("editvn", () => textSheet(v, "visit"));
+  on("skip", () => skipSheet(v));
+  on("complete", () => completeSheet(v));
+  on("updlabor", () => laborSheet(v));
+  on("more", () => moreSheet(v));
+  on("reopen", () => {
+    openSheet(`<h2>Re-open this visit?</h2><p>It goes back to open in Homeworks so you can work on it again.</p>
+      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="go">${I.reopen} Re-open</button></div>`);
+    $("cx").onclick = closeSheet; $("go").onclick = () => { closeSheet(); act("reopen", v.id, {}, "Visit re-opened"); };
+  });
+  renderBar(v);
+}
+
+function renderBar(v) {
+  const bar = $("bar"); bar.classList.remove("hidden");
+  const status = statusOf(v.status);
+  const m = v.running || {};
+  const n = Object.keys(m).length;
+  const hrs = liveHours(v);
+  const pct = v.bh ? Math.min(100, (hrs / v.bh) * 100) : 0;
+  const longest = n ? Math.max(...Object.values(m).map((st) => now() - st)) : 0;
+  const over = v.bh && hrs > v.bh;
+  bar.classList.toggle("done", status !== "open");
+  bar.innerHTML = `
+    <div class="row">
+      <div class="clock ${n ? "" : "idle"}" id="bigclock">${status !== "open" ? I.done + " " + hms(hrs * 3600000) : hms(longest)}${n ? `<small>${n} on job</small>` : ""}</div>
+      ${status !== "open" ? "" : n ? `<button class="btn btn-brown" type="button" id="stopall">${I.stop} Stop work</button>` : `<button class="btn btn-primary" type="button" id="start">${I.play} Start work</button>`}
+    </div>
+    <div class="prog"><div id="progfill" class="${over ? "over" : ""} ${n ? "live" : ""}" style="width:${pct}%"></div></div>
+    <div class="meta"><span id="tracked">${hm(hrs)} tracked</span><span id="bhtxt" class="${over ? "overtxt" : ""}">${!v.bh ? "No budgeted hours" : over ? `Over BH by ${hm(hrs - v.bh)}` : `BH: ${hm(v.bh)}`}</span></div>`;
+  if ($("start")) $("start").onclick = () => pickSheet(v, false);
+  if ($("stopall")) $("stopall").onclick = () => stopSheet(v, Object.keys(m).map(Number));
+}
+
+// ---------- sheets ----------
+function openSheet(html) { $("sheet").innerHTML = `<div class="grab"></div>` + html; $("scrim").classList.add("on"); }
+function closeSheet() { $("scrim").classList.remove("on"); }
+$("scrim").onclick = (e) => { if (e.target === $("scrim")) closeSheet(); };
+
+function pickSheet(v, adding) {
+  const m = v.running || {};
+  const people = crewList.length ? crewList : [{ id: me.id, name: me.name, clockedIn: true }];
+  const assigned = people.filter((c) => v.assigned.includes(c.id) && m[c.id] == null).map((c) => c.id);
+  const others = people.filter((c) => !v.assigned.includes(c.id) && m[c.id] == null).map((c) => c.id);
+  const person = (id) => people.find((c) => c.id === id);
+  const sel = new Set(adding ? [] : assigned.filter((id) => person(id).clockedIn && !jobOf(id)));
+  const row = (id) => {
+    const c = person(id), j = jobOf(id);
+    const sub = j ? `<small class="warn">On ${esc(j.title)}. Starting here moves them.</small>` :
+      !c.clockedIn ? `<small class="warn">Not clocked in. Their time starts with this job.</small>` : `<small>Clocked in${c.since ? " " + t12(Date.parse(c.since)) : ""}</small>`;
+    return `<button class="pick ${sel.has(id) ? "on" : ""}" type="button" data-p="${id}"><span class="box">${I.check}</span><span class="avatar">${esc(initials(c.name))}</span><span class="n"><b>${esc(c.name)}</b>${sub}</span></button>`;
+  };
+  const draw = () => {
+    openSheet(`
+      <h2>${adding ? "Add to this job" : "Who's working?"}</h2>
+      <p>${esc(v.title)} · ${esc(v.customer)}</p>
+      ${assigned.length ? `<div class="label sec">Assigned to this visit</div>${assigned.map(row).join("")}` : ""}
+      ${others.length ? `<div class="label sec">Someone else</div>${others.map(row).join("")}` : ""}
+      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="go">${I.play} Start ${sel.size || ""}</button></div>`);
+    $("sheet").querySelectorAll("[data-p]").forEach((b) => (b.onclick = () => { const id = +b.dataset.p; sel.has(id) ? sel.delete(id) : sel.add(id); draw(); }));
+    $("cx").onclick = closeSheet;
+    $("go").onclick = () => {
+      if (!sel.size) { toast("Pick at least one person"); return; }
+      const at = new Date().toISOString(), who = [...sel];
+      // Anyone moved from another visit on this phone: end it there too.
+      for (const u of who) { const j = jobOf(u); if (j && j.eventId !== v.id && visits[j.eventId]) { const o = visits[j.eventId]; o.done += (Date.parse(at) - o.running[u]) / 3600000; delete o.running[u]; saveVisit(o); } }
+      closeSheet();
+      act("start", v.id, { userIds: who, at }, `Started ${who.map(firstOf).join(", ")}`);
+    };
+  };
+  draw();
+}
+
+function stopSheet(v, preselect) {
+  const m = v.running || {};
+  const ids = Object.keys(m).map(Number);
+  const sel = new Set(preselect);
+  let end = Math.floor(now() / 60000) * 60000;
+  const earliest = () => Math.max(...[...sel].map((id) => m[id]));
+  const draw = () => {
+    openSheet(`<h2>Stop work</h2><p>Who's done, and when did they stop?</p>
+      ${ids.map((id) => `<button class="pick ${sel.has(id) ? "on" : ""}" type="button" data-p="${id}"><span class="box">${I.check}</span><span class="avatar">${esc(initials(nameOf(id)))}</span><span class="n"><b>${esc(nameOf(id))}</b><small>Started ${t12(m[id])} · ${hms(end - m[id])}</small></span></button>`).join("")}
+      <div class="label sec">Stopped at</div>
+      <div class="stepper"><button type="button" id="mn" aria-label="5 minutes earlier">−</button><b>${t12(end)}</b><button type="button" id="pl" aria-label="5 minutes later">+</button></div>
+      <p style="text-align:center">${now() - end < 90000 ? "Now" : "Earlier"} · tap − if they left earlier</p>
+      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-brown" type="button" id="go">${I.stop} Stop ${sel.size === ids.length ? "everyone" : sel.size}</button></div>`);
+    $("sheet").querySelectorAll("[data-p]").forEach((b) => (b.onclick = () => { const id = +b.dataset.p; sel.has(id) ? sel.delete(id) : sel.add(id); draw(); }));
+    $("mn").onclick = () => { if (!sel.size) return; end = Math.max(earliest() + 60000, end - 300000); draw(); };
+    $("pl").onclick = () => { end = Math.min(now(), end + 300000); draw(); };
+    $("cx").onclick = closeSheet;
+    $("go").onclick = () => {
+      if (!sel.size) { toast("Pick at least one person"); return; }
+      const rows = [...sel].map((id) => [firstOf(id), end - m[id]]);
+      act("stop", v.id, { userIds: [...sel], end: new Date(end).toISOString() });
+      openSheet(`
+        <h2>${offline ? "Saved on this phone" : "Saved to Homeworks"}</h2>
+        <p>Job time ${offline ? "goes to each person's timesheet when signal is back" : "added to each person's timesheet"}, ending at ${t12(end)}. They're back on shop / drive time.</p>
+        <div class="summary">${rows.map(([n, ms]) => `<div><span>${esc(n)}</span><b>${hms(ms)}</b></div>`).join("")}</div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px" type="button" id="cx">Done</button>`);
+      $("cx").onclick = closeSheet;
+    };
+  };
+  draw();
+}
+
+function fixSheet(v, cid) {
+  let st = v.running[cid];
+  const draw = () => {
+    openSheet(`<h2>Fix start time</h2><p>${esc(nameOf(cid))} started late or early? Adjust when their job time began.</p>
+      <div class="stepper"><button type="button" id="mn" aria-label="5 minutes earlier">−</button><b>${t12(st)}</b><button type="button" id="pl" aria-label="5 minutes later">+</button></div>
+      <p style="text-align:center">Moves in 5-minute steps</p>
+      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="sv">Save</button></div>`);
+    $("mn").onclick = () => { st = Math.max(now() - 16 * 3600000, st - 300000); draw(); };
+    $("pl").onclick = () => { st = Math.min(now(), st + 300000); draw(); };
+    $("cx").onclick = closeSheet;
+    $("sv").onclick = () => { closeSheet(); act("fix", v.id, { userId: cid, start: new Date(st).toISOString() }, "Start time updated"); };
+  };
+  draw();
+}
+
+function noteSheet(v) {
+  openSheet(`<h2>Add dispatch note</h2><p>The office sees this on the visit in Homeworks.</p>
+    <textarea id="nt" placeholder="Customer asked us to edge the front walk too."></textarea>
+    <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="sv">Save note</button></div>`);
+  $("cx").onclick = closeSheet;
+  $("sv").onclick = () => { const t = $("nt").value.trim(); if (!t) { toast("Write a note first"); return; } closeSheet(); act("note", v.id, { text: t }, "Note saved"); };
+}
+
+function textSheet(v, which) {
+  const prop = which === "prop";
+  openSheet(`<h2>${prop ? "Property notes" : "Visit note"}</h2><p>${prop ? "These show on every visit to this property." : "Shows on this visit in Homeworks."}</p>
+    <textarea id="pn">${esc(prop ? v.propNotes : v.visitNote)}</textarea>
+    <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="sv">Save</button></div>`);
+  $("cx").onclick = closeSheet;
+  $("sv").onclick = () => {
+    const t = $("pn").value.trim(); closeSheet();
+    prop ? act("prop-note", v.id, { propertyId: v.propertyId, text: t }, "Property notes saved") : act("visit-note", v.id, { text: t }, "Visit note saved");
+  };
+}
+
+function moreSheet(v) {
+  openSheet(`<button class="sheet-x" type="button" id="cx" aria-label="Close">${I.x}</button><h2>More actions</h2><p>${esc(v.customer)}</p>
+    ${v.phone ? `<button class="act" type="button" id="txt">${I.chat}<span>Text Customer</span></button>
+    <button class="act" type="button" id="cll">${I.call}<span>Call Customer</span></button>` : `<div class="empty" style="margin-bottom:10px">${I.info} No phone number on file</div>`}
+    ${v.upsells.length ? `<button class="act" type="button" id="ups">${I.bag}<span>Send an upsell${v.sentUpsell ? `<small>${esc(v.sentUpsell)} sent from this phone</small>` : ""}</span></button>` : ""}`);
+  $("cx").onclick = closeSheet;
+  if ($("txt")) $("txt").onclick = () => contactSheet(v, "text");
+  if ($("cll")) $("cll").onclick = () => contactSheet(v, "call");
+  if ($("ups")) $("ups").onclick = () => upsellSheet(v);
+}
+
+function contactSheet(v, kind) {
+  const call = kind === "call";
+  openSheet(`<div class="confirm-box">
+      <h2>${call ? "Call" : "Text"} ${esc(v.customer)}?</h2>
+      <div class="big">${esc(v.phone)}</div>
+      <p>${call ? "Opens your phone app to place the call." : "Opens Messages with a new text to the customer."}</p></div>
+    <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><a class="btn btn-primary" id="go" href="${call ? "tel" : "sms"}:${esc(v.phone.replace(/[^\d+]/g, ""))}" style="text-decoration:none">${call ? I.call + " Call" : I.chat + " Text"}</a></div>`);
+  $("cx").onclick = () => moreSheet(v);
+  $("go").onclick = () => setTimeout(closeSheet, 300);
+}
+
+function upsellSheet(v) {
+  openSheet(`<button class="sheet-x" type="button" id="cx" aria-label="Back">${I.x}</button><h2>Send an upsell</h2><p>Pick a template. Homeworks texts it to ${esc(v.customer)}.</p>
+    ${v.upsells.map((u) => `<button class="act" type="button" data-u="${u.id}">${I.bag}<span>${esc(u.name)}</span></button>`).join("")}`);
+  $("cx").onclick = () => moreSheet(v);
+  $("sheet").querySelectorAll("[data-u]").forEach((b) => (b.onclick = () => {
+    const u = v.upsells.find((x) => x.id === +b.dataset.u);
+    openSheet(`<div class="confirm-box"><h2>Send ${esc(u.name)}?</h2><p>The ${esc(u.name)} text template goes to ${esc(v.customer)}${v.phone ? " at " + esc(v.phone) : ""}.</p></div>
+      <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="go">${I.chat} Send text</button></div>`);
+    $("cx").onclick = () => upsellSheet(v);
+    $("go").onclick = () => { closeSheet(); act("upsell", v.id, { upsellId: u.id, name: u.name }, `${u.name} upsell sent`); };
+  }));
+}
+
+function skipSheet(v) {
+  openSheet(`<h2>Skip this visit?</h2><p>Give a reason. The office sees it in Homeworks.${Object.keys(v.running || {}).length ? " Anyone on the job is stopped first." : ""}</p>
+    <input class="tinput" id="rs" placeholder="Rain, customer canceled">
+    <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-danger" type="button" id="sv">${I.skip} Skip visit</button></div>`);
+  $("cx").onclick = closeSheet;
+  $("sv").onclick = () => {
+    const reason = $("rs").value.trim();
+    if (!reason) { toast("Add a reason"); return; }
+    closeSheet();
+    const on = Object.keys(v.running || {}).map(Number);
+    if (on.length) act("stop", v.id, { userIds: on, end: new Date().toISOString() });
+    act("skip", v.id, { reason }, "Visit skipped");
+  };
+}
+
+function laborPlan(v) {
+  const L = v.items.filter((it) => it.labor && it.bh > 0 && !(it.qty === 1 && it.price > 200));
+  const T = r2(liveHours(v)), tb = L.reduce((s, it) => s + it.bh, 0);
+  let left = T;
+  return L.map((it, i) => { const q = i === L.length - 1 ? r2(left) : r2((T * it.bh) / tb); left = r2(left - q); return { lineItemId: it.id, name: it.n, from: it.qty, to: q }; });
+}
+
+function laborSheet(v) {
+  const n = Object.keys(v.running || {}).length, plan = laborPlan(v);
+  if (!plan.length) { toast("No hourly labor lines on this visit"); return; }
+  openSheet(`<h2>Update labor qty</h2><p>Sets the labor ${plan.length > 1 ? "lines" : "line"} to the time tracked on this visit (${hm(liveHours(v))}, everyone added up, lunch counted as work)${plan.length > 1 ? ", split by budgeted hours" : ""}.</p>
+    ${n ? `<div class="alert">${n} still on the job, so this counts time up to now. Update again after you stop work.</div>` : ""}
+    <div class="summary" style="display:block">${plan.map((p) => `<div class="chg"><span>${esc(p.name)}</span><b><s>${p.from}</s>→ ${p.to} h</b></div>`).join("")}</div>
+    <p>Only labor lines change. Materials stay the same.</p>
+    <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="sv">${I.check} Update</button></div>`);
+  $("cx").onclick = closeSheet;
+  $("sv").onclick = () => { closeSheet(); act("labor", v.id, { apply: true, plan: plan.map(({ lineItemId, to }) => ({ lineItemId, to })) }, "Labor qty updated"); };
+}
+
+function completeSheet(v) {
+  const m = v.running || {};
+  const L = v.items.filter((it) => it.labor && it.bh > 0);
+  const lq = r2(L.reduce((s, it) => s + it.qty, 0));
+  const off = L.length && Math.abs(lq - r2(liveHours(v))) >= 0.01;
+  openSheet(`<h2>Complete visit?</h2><p>${Object.keys(m).length ? "Anyone still on the job is stopped first. " : ""}Completing creates the invoice in Homeworks, same as FieldForce.</p>
+    <div class="summary"><div><span>Tracked</span><b>${hm(liveHours(v))}</b></div><div><span>Budgeted</span><b>${hm(v.bh)}</b></div>${L.length ? `<div><span>Labor qty</span><b>${lq} h</b></div>` : ""}</div>
+    ${off ? `<div class="alert">Labor qty doesn't match tracked time. If it should, tap Update labor qty first. The invoice uses the labor qty.</div>` : ""}
+    <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-primary" type="button" id="sv">${I.check} Complete</button></div>`);
+  $("cx").onclick = closeSheet;
+  $("sv").onclick = () => { closeSheet(); act("complete", v.id, { at: new Date().toISOString() }, "Visit completed"); };
+}
+
+// ---------- photos ----------
+// Shrink each photo on the phone (about 1600 px) so it sends quickly on weak signal.
+function shrink(file) {
+  return new Promise((ok, bad) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL("image/jpeg", 0.82).split(",")[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); bad(new Error("Couldn't read that photo.")); };
+    img.src = url;
+  });
+}
+
+async function addPhotos(v, kind, files) {
+  for (const f of files) {
+    try {
+      const data = await shrink(f);
+      await act("photo", v.id, { kind, propertyId: v.propertyId, contentType: "image/jpeg", data }, files.length > 1 ? null : (offline ? "Photo saved on this phone" : "Saving photo…"));
+    } catch (e) { toast(e.message); }
+  }
+  if (files.length > 1) toast(`${files.length} photos ${offline ? "saved on this phone" : "saving…"}`);
+}
+
+function removePhoto(v, kind, id) {
+  const it = v.media[kind].find((m) => String(m.id) === id);
+  if (!it) return;
+  const where = { before: "the Before photos", after: "the After photos", event: "this visit", prop: "this property" }[kind];
+  openSheet(`<h2>Remove photo?</h2><img class="rmprev" src="${esc(it.src)}" alt=""><p>It's also removed from ${where} in Homeworks.</p>
+    <div class="row2"><button class="btn btn-ghost" type="button" id="cx">Cancel</button><button class="btn btn-brown" type="button" id="go">Remove</button></div>`);
+  $("cx").onclick = closeSheet;
+  $("go").onclick = () => { closeSheet(); act("photo-remove", v.id, { kind, mediaId: it.id, ba: it.ba, propertyId: v.propertyId }, "Photo removed"); };
+}
+
+// ---------- sign in ----------
+let pin = "";
+function renderSignIn() {
+  $("hdr").classList.add("hidden"); $("bar").classList.add("hidden");
+  $("main").innerHTML = `<div class="signin">
+    <img src="${LEAF}" alt="">
+    <h1>Crew clock</h1><p>Enter your PIN</p>
+    <div class="pin-dots" id="dots"></div>
+    <div class="pad" id="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button type="button">${n}</button>`).join("")}<button type="button" class="fn" data-k="clear">Clear</button><button type="button">0</button><button type="button" class="fn" data-k="back">⌫</button></div>
+    <div class="err" id="err"></div></div>`;
+  const draw = () => ($("dots").innerHTML = [0, 1, 2, 3].map((i) => `<div class="${i < pin.length ? "" : "empty"}"></div>`).join(""));
+  draw();
+  $("pad").onclick = async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const k = b.dataset.k || b.textContent.trim();
+    if (k === "clear") pin = ""; else if (k === "back") pin = pin.slice(0, -1); else if (pin.length < 4) pin += k;
+    draw(); $("err").textContent = "";
+    if (pin.length === 4) {
+      try {
+        const r = await api("crew/login", { pin });
+        session = r.session; me = r.me; store.set("crewSession", session); store.set("crewMe", me);
+        pin = ""; view = { name: "schedule" }; day = ymd(new Date());
+        render(); loadSchedule(day).then(prefetch); flush();
+      } catch (err) { pin = ""; draw(); $("err").textContent = err.network ? "No signal. You need signal to sign in the first time." : err.message; }
+    }
+  };
+}
+function signOut() { session = null; me = null; store.set("crewSession", null); store.set("crewMe", null); render(); }
+
+// ---------- clock tick ----------
+function tick() {
+  if (!session || view.name !== "visit") return;
+  const v = visits[view.id]; if (!v) return;
+  const m = v.running || {};
+  for (const [cid, st] of Object.entries(m)) { const el = document.querySelector(`[data-tm="${cid}"]`); if (el) el.textContent = hms(now() - st); }
+  if (!Object.keys(m).length || statusOf(v.status) !== "open") return;
+  const c = $("bigclock"); if (c && c.firstChild) c.firstChild.textContent = hms(Math.max(...Object.values(m).map((st) => now() - st)));
+  const h = liveHours(v), tr = $("tracked"); if (tr) tr.textContent = `${hm(h)} tracked`;
+  const pf = $("progfill"), bt = $("bhtxt");
+  if (pf && v.bh) { pf.style.width = Math.min(100, (h / v.bh) * 100) + "%"; pf.classList.toggle("over", h > v.bh); }
+  if (bt && v.bh) { bt.className = h > v.bh ? "overtxt" : ""; bt.textContent = h > v.bh ? `Over BH by ${hm(h - v.bh)}` : `BH: ${hm(v.bh)}`; }
+}
+setInterval(tick, 1000);
+
+// ---------- start ----------
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/crew/sw.js", { scope: "/crew/" }).catch(() => {});
+(async () => {
+  await refreshQueue();
+  render();
+  if (session) { await loadSchedule(day); flush(); prefetch(); }
+})();
+</script>
+</body>
+</html>

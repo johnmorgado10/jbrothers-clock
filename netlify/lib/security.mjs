@@ -79,3 +79,20 @@ export async function clearFailures(key) {
     await setJSON("lockouts", all);
   }
 }
+
+// Crew clock session = "userId.expiry.signature". Access is still re-checked on every
+// request, so turning someone's access off in Admin takes effect right away.
+export async function makeCrewSession(userId, days = 90) {
+  const exp = Date.now() + days * 86400_000;
+  const sig = crypto.createHmac("sha256", await siteSecret()).update(`crew|${userId}|${exp}`).digest("base64url");
+  return `${userId}.${exp}.${sig}`;
+}
+
+export async function verifyCrewSession(token) {
+  const [uid, expStr, sig] = String(token || "").split(".");
+  const exp = Number(expStr);
+  if (!uid || !exp || !sig || exp < Date.now()) return null;
+  const good = crypto.createHmac("sha256", await siteSecret()).update(`crew|${uid}|${exp}`).digest("base64url");
+  if (good.length !== sig.length || !crypto.timingSafeEqual(Buffer.from(good), Buffer.from(sig))) return null;
+  return Number(uid);
+}

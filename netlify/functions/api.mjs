@@ -2,9 +2,10 @@
 import { getJSON, setJSON } from "../lib/store.mjs";
 import {
   randomToken, sha256, hashPin, checkPin, makeAdminSession, verifyAdminSession,
-  lockedFor, recordFailure, clearFailures,
+  lockedFor, recordFailure, clearFailures, makeCrewSession, verifyCrewSession,
 } from "../lib/security.mjs";
 import * as hw from "../lib/homeworks.mjs";
+import * as crew from "../lib/crew.mjs";
 import { payrollWeek, averages, defaultWeek, addDays, mondayOf } from "../lib/payroll.mjs";
 
 const json = (data, status = 200) =>
@@ -13,7 +14,7 @@ const redirect = (url) => new Response(null, { status: 302, headers: { Location:
 
 const getConfig = async () => {
   const c = await getJSON("config", {});
-  return { adminPin: null, pins: {}, devices: [], ...c };
+  return { adminPin: null, pins: {}, devices: [], crewAccess: [], ...c };
 };
 const saveConfig = (c) => setJSON("config", c);
 
@@ -91,19 +92,33 @@ async function kiosk(req, path, context) {
   if (who.error) return json({ error: who.error }, who.status);
 
   if (path === "kiosk/lookup") {
-    const since = await hw.clockedInSince(who.userId);
+    let since = await hw.clockedInSince(who.userId);
+    if (!since) {
+      // On a job in the crew clock counts as clocked in (their shop timer is paused).
+      const job = await crew.runningFor(who.userId);
+      if (job) since = new Date(job.start).toISOString();
+    }
     return json({ name: who.name, clockedIn: !!since, since, canClockIn: isShop });
   }
 
   if (path === "kiosk/clock") {
     if (body.action === "in") {
       if (!isShop) return json({ error: MSG_SHOP_ONLY, errorEs: MSG_SHOP_ONLY_ES, shopOnly: true }, 403);
+      if (await crew.runningFor(who.userId)) return json({ ok: true, name: who.name, action: "in", already: true });
       const r = await hw.clockIn(who.userId);
       if (r) await logPunch({ userId: who.userId, action: "in", source: "shop" });
       return json({ ok: true, name: who.name, action: "in", already: !r, at: r?.createdAt || new Date().toISOString() });
     }
     if (body.action === "out") {
-      const r = await hw.clockOut(who.userId);
+      // Still on a job in the crew clock? The job ends at this clock-out.
+      let job = null;
+      try {
+        job = await crew.stopForClockOut(who.userId, Date.now());
+      } catch (err) {
+        await addFlag({ userId: who.userId, name: who.name, kind: "crew", reason: `Clocked out while on a job, but the job time couldn't be saved: ${err.message}` });
+      }
+      const out = await hw.clockOut(who.userId);
+      const r = out || (job ? { createdAt: new Date(job.end).toISOString() } : null);
       if (!r) return json({ ok: true, name: who.name, action: "out", already: true });
       let lunch = null;
       if (body.lunch) {
@@ -114,7 +129,7 @@ async function kiosk(req, path, context) {
         }
         if (!lunch.ok) await addFlag({ userId: who.userId, name: who.name, kind: "lunch", reason: lunch.reason });
       }
-      await logPunch({ userId: who.userId, action: "out", lunch: !!body.lunch, lunchOk: lunch ? !!lunch.ok : null, source: isShop ? "shop" : "phone", clockOutAt: r.createdAt });
+      await logPunch({ userId: who.userId, action: "out", lunch: !!body.lunch, lunchOk: lunch ? !!lunch.ok : null, source: isShop ? "shop" : "phone", clockOutAt: r.createdAt, jobStopped: job?.title });
       return json({ ok: true, name: who.name, action: "out", at: r.createdAt, lunch });
     }
     return json({ error: "Unknown action." }, 400);
@@ -164,7 +179,7 @@ async function admin(req, path) {
       let changed = false;
       for (const p of people) if (cfg.pins[p.id] && cfg.pins[p.id].name !== p.name) { cfg.pins[p.id].name = p.name; changed = true; }
       if (changed) await saveConfig(cfg);
-      return json({ employees: people.map((p) => ({ ...p, pin: cfg.pins[p.id]?.pin || "" })) });
+      return json({ employees: people.map((p) => ({ ...p, pin: cfg.pins[p.id]?.pin || "", crew: cfg.crewAccess.includes(p.id) })) });
     }
 
     case "admin/set-pin": {
@@ -198,6 +213,16 @@ async function admin(req, path) {
       }
       await saveConfig(cfg);
       return json({ ok: true, made });
+    }
+
+    case "admin/crew-access": {
+      const id = Number(body.userId);
+      if (!id) return json({ error: "Missing employee." }, 400);
+      const set = new Set(cfg.crewAccess);
+      body.on ? set.add(id) : set.delete(id);
+      cfg.crewAccess = [...set];
+      await saveConfig(cfg);
+      return json({ ok: true });
     }
 
     case "admin/devices":
@@ -284,6 +309,143 @@ async function admin(req, path) {
   return json({ error: "Not found." }, 404);
 }
 
+// ---------- crew clock (/crew) ----------
+// Only people switched on under Admin > PINs > Crew clock can sign in. They sign in with
+// their normal PIN; the phone then stays signed in.
+
+const CREW_LIMIT = { max: 5, lockMs: 5 * 60_000 };
+const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "");
+const ids = (a) => (Array.isArray(a) ? a.map(Number).filter(Boolean) : []);
+
+async function crewApi(req, path, context) {
+  const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+  const cfg = await getConfig();
+
+  if (path === "crew/login") {
+    const key = "crew:" + clientKey(req, context);
+    const wait = await lockedFor(key);
+    if (wait) return json({ error: `Too many wrong PINs. Try again in ${wait} seconds.` }, 429);
+    const hit = Object.entries(cfg.pins).find(([, v]) => v.pin === String(body.pin || ""));
+    if (!hit) {
+      await recordFailure(key, CREW_LIMIT);
+      return json({ error: "PIN not recognized." }, 401);
+    }
+    const uid = Number(hit[0]);
+    if (!cfg.crewAccess.includes(uid)) return json({ error: `${hit[1].name.split(" ")[0]}, you don't have access to the crew clock.` }, 403);
+    await clearFailures(key);
+    return json({ session: await makeCrewSession(uid), me: { id: uid, name: hit[1].name } });
+  }
+
+  const uid = await verifyCrewSession((req.headers.get("authorization") || "").replace(/^Bearer /, ""));
+  if (!uid || !cfg.crewAccess.includes(uid)) return json({ error: "Please sign in again.", signedOut: true }, 401);
+  const me = { id: uid, name: cfg.pins[uid]?.name || "" };
+  const by = me.name.split(" ")[0];
+  const eventId = Number(body.eventId);
+
+  switch (path) {
+    case "crew/me":
+      return json({ me });
+
+    case "crew/crew": {
+      const people = await hw.listEmployees();
+      const punches = await getJSON("punches", []);
+      return json({ crew: await crew.crewList(people, punches.slice(-300)) });
+    }
+
+    case "crew/schedule": {
+      if (!isDate(body.date)) return json({ error: "Missing date." }, 400);
+      return json({ date: body.date, visits: await crew.schedule(uid, body.date) });
+    }
+
+    case "crew/visit": {
+      const v = await crew.visit(eventId);
+      if (!v.assigned.includes(uid)) return json({ error: "You're not assigned to this visit in Homeworks." }, 403);
+      const people = await hw.listEmployees();
+      const punches = await getJSON("punches", []);
+      return json({ visit: v, crew: await crew.crewList(people, punches.slice(-300)) });
+    }
+
+    case "crew/start": {
+      const who = ids(body.userIds);
+      if (!eventId || !who.length) return json({ error: "Pick at least one person." }, 400);
+      return json(await crew.startWork({ eventId, userIds: who, at: body.at, by }));
+    }
+
+    case "crew/stop": {
+      const who = ids(body.userIds);
+      if (!eventId || !who.length) return json({ error: "Pick at least one person." }, 400);
+      return json(await crew.stopWork({ eventId, userIds: who, end: body.end, by }));
+    }
+
+    case "crew/fix":
+      return json(await crew.fixStart({ eventId, userId: Number(body.userId), start: body.start }));
+
+    case "crew/labor": {
+      const v = await crew.visit(eventId);
+      if (!v.labor.length) return json({ error: "This visit has no hourly labor lines to update." }, 400);
+      let plan = v.labor;
+      if (Array.isArray(body.plan)) {
+        // The phone sends the hours it showed (it may have been offline); only labor lines of this visit.
+        const allowed = new Map(v.labor.map((p) => [p.lineItemId, p]));
+        plan = body.plan.filter((p) => allowed.has(Number(p.lineItemId)) && Number(p.to) >= 0 && Number(p.to) < 10000)
+          .map((p) => ({ ...allowed.get(Number(p.lineItemId)), to: Math.round(Number(p.to) * 100) / 100 }));
+      }
+      if (body.apply) await crew.updateLabor(eventId, plan);
+      return json({ ok: true, tracked: v.tracked, plan, applied: !!body.apply });
+    }
+
+    case "crew/note": {
+      const t = String(body.text || "").trim().slice(0, 2000);
+      if (!t) return json({ error: "Write a note first." }, 400);
+      await crew.addDispatchNote(eventId, `${t} — ${by}`);
+      return json({ ok: true });
+    }
+
+    case "crew/visit-note":
+      await crew.setVisitNote(eventId, String(body.text || "").slice(0, 5000));
+      return json({ ok: true });
+
+    case "crew/prop-note":
+      await crew.setPropertyNotes(Number(body.propertyId), String(body.text || "").slice(0, 5000));
+      return json({ ok: true });
+
+    case "crew/complete": {
+      const running = await crew.getRunning();
+      const on = Object.entries(running).filter(([, r]) => r.eventId === eventId).map(([u]) => Number(u));
+      if (on.length) await crew.stopWork({ eventId, userIds: on, end: body.at, by });
+      await crew.closeEvent(eventId);
+      return json({ ok: true, stopped: on });
+    }
+
+    case "crew/skip": {
+      const reason = String(body.reason || "").trim().slice(0, 500);
+      if (!reason) return json({ error: "Add a reason." }, 400);
+      await crew.skipEvent(eventId, reason);
+      return json({ ok: true });
+    }
+
+    case "crew/reopen":
+      await crew.reopenEvent(eventId);
+      return json({ ok: true });
+
+    case "crew/upsell": {
+      const v = await crew.visit(eventId);
+      await crew.sendUpsell(eventId, v.customerId, Number(body.upsellId));
+      return json({ ok: true });
+    }
+
+    case "crew/photo": {
+      if (!["before", "after", "event", "prop"].includes(body.kind)) return json({ error: "Unknown photo type." }, 400);
+      if (!/^image\/(jpeg|png|heic|webp)$/.test(body.contentType || "")) return json({ error: "Only photos can be added." }, 400);
+      return json(await crew.addPhoto({ eventId, propertyId: Number(body.propertyId), kind: body.kind, contentType: body.contentType, data: String(body.data || "") }));
+    }
+
+    case "crew/photo-remove":
+      return json(await crew.removePhoto({ kind: body.kind, mediaId: Number(body.mediaId), ba: Number(body.ba), eventId, propertyId: Number(body.propertyId) }));
+  }
+  return json({ error: "Not found." }, 404);
+}
+
 // ---------- OAuth ----------
 
 async function oauth(req, path, url) {
@@ -307,6 +469,7 @@ export default async (req, context) => {
   try {
     if (path.startsWith("kiosk/")) return await kiosk(req, path, context);
     if (path.startsWith("admin/")) return await admin(req, path);
+    if (path.startsWith("crew/")) return await crewApi(req, path, context);
     if (path.startsWith("oauth/")) return await oauth(req, path, url);
     return json({ error: "Not found." }, 404);
   } catch (err) {

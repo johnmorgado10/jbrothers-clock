@@ -58,6 +58,8 @@
   .flag .name { color: var(--jb-brown); }
 
   .hidden { display: none !important; }
+  .tog { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--jb-gray-600); white-space: nowrap; cursor: pointer; }
+  .tog input { width: 22px; height: 22px; accent-color: var(--jb-brown); }
   input, textarea { -webkit-user-select: text; user-select: text; }
   .input.pin { -webkit-text-security: disc; }
   #emps .input.pin { -webkit-text-security: none; }
@@ -147,7 +149,7 @@
 
     <div class="card" id="c-flags">
       <span class="label">Needs attention</span>
-      <h2 class="serif">Lunch to fix</h2>
+      <h2 class="serif">Time to fix</h2>
       <div id="flags"></div>
     </div>
 
@@ -155,6 +157,7 @@
       <span class="label">Crew</span>
       <h2 class="serif">Employee PINs</h2>
       <p class="muted">Each person types their PIN at the shop tablet to clock in or out. Leave a PIN blank to take someone off the clock.</p>
+      <p class="muted"><b>Crew clock</b>: switch on for the people who can run jobs for the crew on their phone (at <a href="/crew/">/crew</a>). They sign in with their PIN.</p>
       <table id="emps"><tr><td class="muted">Loading…</td></tr></table>
       <hr class="rule">
       <button class="btn btn-outline" id="gen">Make PINs for everyone without one</button>
@@ -253,6 +256,7 @@ async function loadAdmin() {
       <td><span class="name">${esc(e.name)}</span>${e.role === "OWNER" ? ' <span class="badge soft">Owner</span>' : ""}</td>
       <td><input class="input pin" maxlength="4" inputmode="numeric" value="${esc(e.pin)}" placeholder="—"></td>
       <td><button class="btn btn-outline save">Save</button></td>
+      <td><label class="tog" title="Crew clock access"><input type="checkbox" class="crewtog" ${e.crew ? "checked" : ""}><span>Crew clock</span></label></td>
     </tr>`).join("");
 
   const mine = ls.get("kioskDeviceId");
@@ -268,7 +272,7 @@ async function loadAdmin() {
   $("c-flags").classList.toggle("hidden", !flags.flags.length);
   $("flags").innerHTML = flags.flags.map((f) => `
     <div class="flag"><span class="name">${esc(f.name)}</span> · ${fmt(f.at)}<br>
-    Said yes to lunch, but 30 min couldn't be taken off automatically. Fix it in Homeworks.<br>
+    ${f.kind === "crew" ? "Crew clock problem. Check their job time in Homeworks." : "Said yes to lunch, but 30 min couldn't be taken off automatically. Fix it in Homeworks."}<br>
     <span class="muted">${esc(f.reason)}</span><br>
     <button class="btn btn-outline dismiss" data-id="${f.id}" style="margin-top:10px">Done, dismiss</button></div>`).join("");
 }
@@ -314,6 +318,14 @@ $("chg-admin").onclick = async () => {
 };
 $("signout").onclick = () => { ss.set("adminSession", null); load(); };
 
+$("emps").onchange = async (e) => {
+  if (!e.target.classList.contains("crewtog")) return;
+  const tr = e.target.closest("tr");
+  try {
+    await api("admin/crew-access", { userId: Number(tr.dataset.id), on: e.target.checked });
+    note(e.target.checked ? `${tr.dataset.name} can now use the crew clock.` : `${tr.dataset.name} no longer has crew clock access.`);
+  } catch (err) { e.target.checked = !e.target.checked; note(err.message, "err"); }
+};
 $("emps").onclick = async (e) => {
   if (!e.target.classList.contains("save")) return;
   const tr = e.target.closest("tr");
